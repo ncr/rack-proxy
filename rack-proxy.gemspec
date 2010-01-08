@@ -16,8 +16,14 @@ Gem::Specification.new do |s|
     "Rakefile",
      "Readme",
      "VERSION",
+     "lib/net_http_hacked.rb",
+     "lib/rack/http_streaming_response.rb",
      "lib/rack/proxy.rb",
-     "test/rack_proxy_test.rb"
+     "rack-proxy.gemspec",
+     "test/http_streaming_response_test.rb",
+     "test/net_http_hacked_test.rb",
+     "test/rack_proxy_test.rb",
+     "test/test_helper.rb"
   ]
   s.homepage = %q{http://github.com/ncr/rack-proxy}
   s.rdoc_options = ["--charset=UTF-8"]
