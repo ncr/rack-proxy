@@ -1,17 +1,22 @@
-require "vendor/gems/environment"
-Bundler.require_env(:test)
-
-require "test/unit"
+require "test_helper"
 require "rack/proxy"
 
 class RackProxyTest < Test::Unit::TestCase
-  include Rack::Test::Methods
-  
-  def app
-    Rack::Proxy.new
+  class TrixProxy < Rack::Proxy
+    def rewrite_request(req)
+      req.env["HTTP_HOST"] = "trix.pl"
+      
+      req
+    end
   end
   
-  def test_fails
+  def app
+    TrixProxy.new
+  end
+  
+  def test_trix
     get "/"
+    assert last_response.ok?
+    assert /Jacek Becela/ === last_response.body
   end
 end
