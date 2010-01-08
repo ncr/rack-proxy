@@ -9,7 +9,7 @@ class HttpStreamingResponseTest < Test::Unit::TestCase
     response = Rack::HttpStreamingResponse.new(req, host)
     
     # Response status
-    assert response.status == "200"
+    assert response.status == 200
     
     # Headers
     headers = response.headers

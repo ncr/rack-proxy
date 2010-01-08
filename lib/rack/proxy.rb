@@ -9,12 +9,14 @@ module Rack
       rewrite_response(perform_request(rewrite_request(Rack::Request.new(env))))
     end
 
+    # Return an instance of Rack::Request
     def rewrite_request(req)
       req
     end
     
-    def rewrite_response(res)
-      res
+    # Return a rack triplet [status, headers, body]
+    def rewrite_response(triplet)
+      triplet
     end
 
     protected

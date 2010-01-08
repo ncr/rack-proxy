@@ -9,7 +9,7 @@ module Rack
     end
     
     def status
-      response.code
+      response.code.to_i
     end
     
     def headers
