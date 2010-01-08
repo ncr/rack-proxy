@@ -40,7 +40,7 @@ module Rack
     end
     
     def http_request_headers(req)
-      req.env.reject do |k, v| 
+      req.env.reject do |k, v|
         !(/^HTTP_[A-Z_]+$/ === k)
       end.map do |k, v|
         [k.sub(/^HTTP_/, ""), v]

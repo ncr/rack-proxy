@@ -32,4 +32,3 @@ class HttpStreamingResponseTest < Test::Unit::TestCase
   end
   
 end
-
