@@ -40,15 +40,19 @@ module Rack
     end
     
     def http_request_headers(req)
-      req.env.reject do |k, v|
+      headers = req.env.reject do |k, v|
         !(/^HTTP_[A-Z_]+$/ === k)
       end.map do |k, v|
         [k.sub(/^HTTP_/, ""), v]
-      end.inject({}) do |hash, k_v|
+      end.inject(Utils::HeaderHash.new) do |hash, k_v|
         k, v = k_v
         hash[k] = v
         hash
       end
+
+      x_forwarded_for = (headers["X-Forwarded-For"].to_s.split(/, +/) << req.env["REMOTE_ADDR"]).join(", ")
+
+      headers.merge!("X-Forwarded-For" =>  x_forwarded_for)
     end
 
   end
