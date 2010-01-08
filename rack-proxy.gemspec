@@ -13,7 +13,8 @@ Gem::Specification.new do |s|
   s.description = %q{A Rack app that provides request/response rewriting proxy capabilities with streaming.}
   s.email = %q{jacek.becela@gmail.com}
   s.files = [
-    "Rakefile",
+    ".gitignore",
+     "Rakefile",
      "Readme",
      "VERSION",
      "lib/net_http_hacked.rb",
