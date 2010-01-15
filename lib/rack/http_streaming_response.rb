@@ -26,12 +26,25 @@ module Rack
       self
     end
 
+    # Can be called only once!
     def each(&block)
       response.read_body(&block)
     ensure
       session.end_request_hacked
     end
+    
+    def to_s
+      @body ||= begin
+        lines = []
+
+        each do |line|
+          lines << line
+        end
         
+        lines.join
+      end
+    end
+    
     protected
     
     # Net::HTTPResponse

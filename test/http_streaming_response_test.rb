@@ -3,16 +3,17 @@ require "rack/http_streaming_response"
 
 class HttpStreamingResponseTest < Test::Unit::TestCase
   
-  def test_streaming
+  def setup
     host, req = "trix.pl", Net::HTTP::Get.new("/")
-    
-    response = Rack::HttpStreamingResponse.new(req, host)
-    
+    @response = Rack::HttpStreamingResponse.new(req, host)
+  end
+  
+  def test_streaming
     # Response status
-    assert response.status == 200
+    assert @response.status == 200
     
     # Headers
-    headers = response.headers
+    headers = @response.headers
     
     assert headers.size > 0
     assert headers["content-type"] == "text/html"
@@ -21,7 +22,7 @@ class HttpStreamingResponseTest < Test::Unit::TestCase
     
     # Body
     chunks = []
-    response.body.each do |chunk|
+    @response.body.each do |chunk|
       chunks << chunk
     end
     
@@ -29,6 +30,17 @@ class HttpStreamingResponseTest < Test::Unit::TestCase
     chunks.each do |chunk|
       assert chunk.is_a?(String)
     end
+    
+    
+  end
+  
+  def test_to_s
+    assert_equal @response.headers["Content-Length"].to_i, @response.body.to_s.size
+  end
+  
+  def test_to_s_called_twice
+    body = @response.body
+    assert_equal body.to_s, body.to_s
   end
   
 end
