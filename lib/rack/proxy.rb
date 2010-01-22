@@ -31,8 +31,8 @@ module Rack
       target_request.initialize_http_header(extract_http_request_headers(source_request.env))
 
       # Setup body
-      if target_request.request_body_permitted? && req.body
-        target_request.body_stream = req.body
+      if target_request.request_body_permitted? && source_request.body
+        target_request.body_stream = source_request.body
       end
       
       # Create a streaming response (the actual network communication is deferred, a.k.a. streamed)
