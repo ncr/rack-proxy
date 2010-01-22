@@ -31,10 +31,10 @@ module Rack
       target_request.initialize_http_header(extract_http_request_headers(source_request.env))
 
       # Setup body
-      if target_request.request_body_permitted?
+      if target_request.request_body_permitted? && source_request.body
         target_request.body_stream    = source_request.body
         target_request.content_length = source_request.content_length
-        target_request.content_type   = source_request.content_type
+        target_request.content_type   = source_request.content_type if source_request.content_type
       end
       
       # Create a streaming response (the actual network communication is deferred, a.k.a. streamed)
