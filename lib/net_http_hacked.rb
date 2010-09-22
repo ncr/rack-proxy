@@ -11,6 +11,8 @@
 # but this is not real monkey patching. 
 # I just added some methods and named them very uniquely
 # to avoid eventual conflicts. You're safe. Trust me.
+#
+# Also, in Ruby 1.9.2 you could use Fibers to avoid hacking net/http.
 
 require 'net/http'
 
