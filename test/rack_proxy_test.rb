@@ -19,4 +19,14 @@ class RackProxyTest < Test::Unit::TestCase
     assert last_response.ok?
     assert /Jacek Becela/ === last_response.body
   end
+
+  def test_header_reconstruction
+    proxy = Rack::Proxy.new
+
+    header = proxy.send(:reconstruct_header_name, "HTTP_ABC")
+    assert header == "ABC"
+
+    header = proxy.send(:reconstruct_header_name, "HTTP_ABC_D")
+    assert header == "ABC-D"
+  end
 end

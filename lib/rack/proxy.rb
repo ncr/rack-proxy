@@ -47,7 +47,7 @@ module Rack
       headers = env.reject do |k, v|
         !(/^HTTP_[A-Z_]+$/ === k)
       end.map do |k, v|
-        [k.sub(/^HTTP_/, ""), v]
+        [reconstruct_header_name(k), v]
       end.inject(Utils::HeaderHash.new) do |hash, k_v|
         k, v = k_v
         hash[k] = v
@@ -57,6 +57,10 @@ module Rack
       x_forwarded_for = (headers["X-Forwarded-For"].to_s.split(/, +/) << env["REMOTE_ADDR"]).join(", ")
 
       headers.merge!("X-Forwarded-For" =>  x_forwarded_for)
+    end
+
+    def reconstruct_header_name(name)
+      name.sub(/^HTTP_/, "").gsub("_", "-")
     end
 
   end
