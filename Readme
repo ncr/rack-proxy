@@ -23,3 +23,5 @@ class Foo < Rack::Proxy
 end
 
 See tests for more examples.
+
+WARNING: Doesn't work with fakeweb/webmock. Both libraries monkey-patch net/http code.
