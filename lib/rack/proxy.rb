@@ -41,6 +41,8 @@ module Rack
       
       # Create a streaming response (the actual network communication is deferred, a.k.a. streamed)
       target_response = HttpStreamingResponse.new(target_request, source_request.host, source_request.port)
+
+      target_response.use_ssl = "https" == source_request.scheme
       
       [target_response.status, target_response.headers, target_response.body]
     end
