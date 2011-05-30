@@ -4,6 +4,8 @@ module Rack
 
   # Wraps the hacked net/http in a Rack way.
   class HttpStreamingResponse
+    attr_accessor :use_ssl
+
     def initialize(request, host, port = nil)
       @request, @host, @port = request, host, port
     end
@@ -54,7 +56,11 @@ module Rack
     
     # Net::HTTP
     def session
-      @session ||= Net::HTTP.start(@host, @port)
+      @session ||= begin
+        http = Net::HTTP.new @host, @port
+        http.use_ssl = self.use_ssl
+        http.start
+      end
     end
     
   end
