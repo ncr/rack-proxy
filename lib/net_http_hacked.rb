@@ -14,7 +14,7 @@
 #
 # Also, in Ruby 1.9.2 you could use Fibers to avoid hacking net/http.
 
-require 'net/http'
+require 'net/https'
 
 class Net::HTTP
   # Original #request with block semantics.
