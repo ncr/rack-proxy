@@ -5,7 +5,7 @@ module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.3.5"
+    VERSION = "0.3.6"
     
     def call(env)
       rewrite_response(perform_request(rewrite_env(env)))

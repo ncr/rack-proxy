@@ -5,7 +5,7 @@ class NetHttpHackedTest < Test::Unit::TestCase
   
   def test_net_http_hacked
     req = Net::HTTP::Get.new("/")
-    http = Net::HTTP.start("trix.pl", "80")
+    http = Net::HTTP.start("www.iana.org", "80")
     
     # Response code
     res = http.begin_request_hacked(req)
@@ -16,7 +16,7 @@ class NetHttpHackedTest < Test::Unit::TestCase
     res.each_header { |k, v| headers[k] = v }
 
     assert headers.size > 0
-    assert headers["content-type"] == "text/html"
+    assert headers["content-type"] == "text/html; charset=UTF-8"
     assert headers["content-length"].to_i > 0
     
     # Body
