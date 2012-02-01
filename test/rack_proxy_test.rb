@@ -5,7 +5,6 @@ class RackProxyTest < Test::Unit::TestCase
   class TrixProxy < Rack::Proxy
     def rewrite_env(env)
       env["HTTP_HOST"] = "trix.pl"
-      
       env
     end
   end
@@ -28,5 +27,19 @@ class RackProxyTest < Test::Unit::TestCase
 
     header = proxy.send(:reconstruct_header_name, "HTTP_ABC_D")
     assert header == "ABC-D"
+  end
+
+  def test_extract_http_request_headers
+    proxy = Rack::Proxy.new
+    env = {
+      'NOT-HTTP-HEADER' => 'test-value',
+      'HTTP_ACCEPT' => 'text/html',
+      'HTTP_CONNECTION' => nil
+    }
+
+    headers = proxy.send(:extract_http_request_headers, env)
+    assert headers.key?('ACCEPT')
+    assert !headers.key?('CONNECTION')
+    assert !headers.key?('NOT-HTTP-HEADER')
   end
 end

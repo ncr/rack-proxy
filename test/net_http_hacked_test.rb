@@ -17,7 +17,7 @@ class NetHttpHackedTest < Test::Unit::TestCase
 
     assert headers.size > 0
     assert headers["content-type"] == "text/html; charset=UTF-8"
-    assert headers["content-length"].to_i > 0
+    assert !headers["date"].nil?
     
     # Body
     chunks = []
