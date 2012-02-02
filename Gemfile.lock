@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    rack-proxy (0.3.4)
+    rack-proxy (0.3.7)
       rack
 
 GEM
@@ -10,11 +10,12 @@ GEM
     rack (1.2.1)
     rack-test (0.5.6)
       rack (>= 1.0)
+    rake (0.9.2.2)
 
 PLATFORMS
   ruby
 
 DEPENDENCIES
-  rack
   rack-proxy!
   rack-test
+  rake
