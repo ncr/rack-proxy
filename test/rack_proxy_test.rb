@@ -42,4 +42,10 @@ class RackProxyTest < Test::Unit::TestCase
     assert !headers.key?('CONNECTION')
     assert !headers.key?('NOT-HTTP-HEADER')
   end
+
+  def test_handles_missing_content_length
+    assert_nothing_thrown do
+      post "/", nil, "CONTENT_LENGTH" => nil
+    end
+  end
 end
