@@ -16,8 +16,9 @@ class HttpStreamingResponseTest < Test::Unit::TestCase
     headers = @response.headers
     
     assert headers.size > 0
-    assert headers["content-type"] == "text/html"
-    assert headers["CoNtEnT-TyPe"] == "text/html"
+
+    assert headers["content-type"] == "text/html;charset=utf-8"
+    assert headers["CoNtEnT-TyPe"] == headers["content-type"]
     assert headers["content-length"].to_i > 0
     
     # Body
