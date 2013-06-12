@@ -25,9 +25,15 @@ module Rack
 
     def perform_request(env)
       source_request = Rack::Request.new(env)
-      
+
       # Initialize request
-      target_request = Net::HTTP.const_get(source_request.request_method.capitalize).new(source_request.fullpath)
+      if source_request.fullpath == ""
+        full_path = URI.parse(env['REQUEST_URI']).request_uri
+      else
+        full_path = source_request.fullpath
+      end
+
+      target_request = Net::HTTP.const_get(source_request.request_method.capitalize).new(full_path)
 
       # Setup headers
       target_request.initialize_http_header(extract_http_request_headers(source_request.env))
