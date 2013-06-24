@@ -5,13 +5,13 @@ module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.3.7"
+    VERSION = "0.4.0"
 
     # @option opts [String, URI::HTTP] :backend Backend host to proxy requests to
     def initialize opts = {}
       @backend = URI(opts[:backend]) if opts[:backend]
     end
-    
+
     def call(env)
       rewrite_response(perform_request(rewrite_env(env)))
     end
@@ -20,7 +20,7 @@ module Rack
     def rewrite_env(env)
       env
     end
-    
+
     # Return a rack triplet [status, headers, body]
     def rewrite_response(triplet)
       triplet
@@ -60,10 +60,10 @@ module Rack
 
         target_response.use_ssl = "https" == source_request.scheme
       end
-      
+
       [target_response.status, target_response.headers, target_response.body]
     end
-    
+
     def extract_http_request_headers(env)
       headers = env.reject do |k, v|
         !(/^HTTP_[A-Z_]+$/ === k) || v.nil?
