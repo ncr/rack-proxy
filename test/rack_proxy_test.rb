@@ -4,7 +4,7 @@ require "rack/proxy"
 class RackProxyTest < Test::Unit::TestCase
   class TrixProxy < Rack::Proxy
     def rewrite_env(env)
-      env["HTTP_HOST"] = "trix.pl"
+      env["HTTP_HOST"] = "www.trix.pl"
       env
     end
   end
