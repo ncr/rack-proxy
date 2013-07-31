@@ -4,7 +4,7 @@ require "rack/http_streaming_response"
 class HttpStreamingResponseTest < Test::Unit::TestCase
 
   def setup
-    host, req = "trix.pl", Net::HTTP::Get.new("/")
+    host, req = "www.trix.pl", Net::HTTP::Get.new("/")
     @response = Rack::HttpStreamingResponse.new(req, host)
   end
 
