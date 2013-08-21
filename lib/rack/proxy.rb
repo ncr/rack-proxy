@@ -5,10 +5,12 @@ module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.4.0"
+    VERSION = "0.5.0"
 
     # @option opts [String, URI::HTTP] :backend Backend host to proxy requests to
-    def initialize opts = {}
+    def initialize(app, opts={})
+      @app = app
+      @streaming = opts.key?(:streaming) ? opts[:streaming] : true
       @backend = URI(opts[:backend]) if opts[:backend]
     end
 
@@ -50,18 +52,31 @@ module Rack
         target_request.content_type   = source_request.content_type if source_request.content_type
       end
 
+
       # Create a streaming response (the actual network communication is deferred, a.k.a. streamed)
-      if @backend
-        target_response = HttpStreamingResponse.new(target_request, @backend.host, @backend.port)
+      if @streaming
+        if @backend
+          target_response = HttpStreamingResponse.new(target_request, @backend.host, @backend.port)
 
-        target_response.use_ssl = "https" == @backend.scheme
+          target_response.use_ssl = "https" == @backend.scheme
+        else
+          target_response = HttpStreamingResponse.new(target_request, source_request.host, source_request.port)
+
+          target_response.use_ssl = "https" == source_request.scheme
+        end
+
+        triplet = [target_response.status, target_response.headers, target_response.body]
       else
-        target_response = HttpStreamingResponse.new(target_request, source_request.host, source_request.port)
+        host = (@backend && @backend.host) || source_request.host
+        port = (@backend && @backend.port) || source_request.port
+        target_response = Net::HTTP.start(host, port) do |http|
+          http.request(target_request)
+        end
 
-        target_response.use_ssl = "https" == source_request.scheme
+        triplet = [target_response.code, target_response.headers, target_response.body]
       end
 
-      [target_response.status, target_response.headers, target_response.body]
+      triplet
     end
 
     def extract_http_request_headers(env)
