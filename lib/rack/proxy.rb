@@ -8,8 +8,7 @@ module Rack
     VERSION = "0.5.0"
 
     # @option opts [String, URI::HTTP] :backend Backend host to proxy requests to
-    def initialize(app, opts={})
-      @app = app
+    def initialize(opts={})
       @streaming = opts.key?(:streaming) ? opts[:streaming] : true
       @backend = URI(opts[:backend]) if opts[:backend]
     end
