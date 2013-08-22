@@ -72,7 +72,8 @@ module Rack
           http.request(target_request)
         end
 
-        triplet = [target_response.code, target_response.headers, target_response.body]
+        headers = (target_response.respond_to?(:headers) && target_response.headers) || {}
+        triplet = [target_response.code, headers, target_response.body]
       end
 
       triplet
