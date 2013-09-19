@@ -10,9 +10,15 @@ module Rack
       @request, @host, @port = request, host, port
     end
 
-    def status
+    def body
+      self
+    end
+
+    def code
       response.code.to_i
     end
+    # #status is deprecated
+    alias_method :status, :code
 
     def headers
       h = Utils::HeaderHash.new
@@ -22,10 +28,6 @@ module Rack
       end
 
       h
-    end
-
-    def body
-      self
     end
 
     # Can be called only once!

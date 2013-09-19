@@ -51,32 +51,20 @@ module Rack
         target_request.content_type   = source_request.content_type if source_request.content_type
       end
 
+      backend = @backend || source_request
 
       # Create a streaming response (the actual network communication is deferred, a.k.a. streamed)
       if @streaming
-        if @backend
-          target_response = HttpStreamingResponse.new(target_request, @backend.host, @backend.port)
-
-          target_response.use_ssl = "https" == @backend.scheme
-        else
-          target_response = HttpStreamingResponse.new(target_request, source_request.host, source_request.port)
-
-          target_response.use_ssl = "https" == source_request.scheme
-        end
-
-        triplet = [target_response.status, target_response.headers, target_response.body]
+        target_response = HttpStreamingResponse.new(target_request, backend.host, backend.port)
+        target_response.use_ssl = backend.scheme == "https"
       else
-        host = (@backend && @backend.host) || source_request.host
-        port = (@backend && @backend.port) || source_request.port
-        target_response = Net::HTTP.start(host, port) do |http|
+        target_response = Net::HTTP.start(backend.host, backend.port) do |http|
           http.request(target_request)
         end
-
-        headers = (target_response.respond_to?(:headers) && target_response.headers) || {}
-        triplet = [target_response.code, headers, target_response.body]
       end
 
-      triplet
+      headers = (target_response.respond_to?(:headers) && target_response.headers) || {}
+      [target_response.code, headers, target_response.body]
     end
 
     def extract_http_request_headers(env)
