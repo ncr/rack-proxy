@@ -10,6 +10,7 @@ class HttpStreamingResponseTest < Test::Unit::TestCase
 
   def test_streaming
     # Response status
+    assert @response.code == 200
     assert @response.status == 200
 
     # Headers
