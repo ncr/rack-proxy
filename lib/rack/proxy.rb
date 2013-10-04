@@ -5,11 +5,11 @@ module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.5.3"
+    VERSION = "0.5.4"
 
     # @option opts [String, URI::HTTP] :backend Backend host to proxy requests to
     def initialize(opts={})
-      @streaming = opts.key?(:streaming) ? opts[:streaming] : true
+      @streaming = opts.fetch(:streaming, true)
       @backend = URI(opts[:backend]) if opts[:backend]
     end
 
