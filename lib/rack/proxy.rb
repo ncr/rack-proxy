@@ -5,7 +5,7 @@ module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.5.2"
+    VERSION = "0.5.3"
 
     # @option opts [String, URI::HTTP] :backend Backend host to proxy requests to
     def initialize(opts={})
@@ -65,7 +65,10 @@ module Rack
       end
 
       headers = (target_response.respond_to?(:headers) && target_response.headers) || {}
-      [target_response.code, headers, target_response.body]
+      body    = target_response.body
+      body    = [body] unless body.respond_to?(:each)
+
+      [target_response.code, headers, body]
     end
 
     def extract_http_request_headers(env)
