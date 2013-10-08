@@ -2,21 +2,44 @@ require "test_helper"
 require "rack/proxy"
 
 class RackProxyTest < Test::Unit::TestCase
-  class TrixProxy < Rack::Proxy
+  class HostProxy < Rack::Proxy
+    attr_accessor :host
+
     def rewrite_env(env)
-      env["HTTP_HOST"] = "www.trix.pl"
+      env["HTTP_HOST"] = self.host || 'www.trix.pl'
       env
     end
   end
-  
-  def app
-    TrixProxy.new
+
+  def app(opts = {})
+    return @app ||= HostProxy.new(opts)
   end
-  
-  def test_trix
+
+  def test_http_streaming
     get "/"
     assert last_response.ok?
-    assert /Jacek Becela/ === last_response.body
+    assert_match(/Jacek Becela/, last_response.body)
+  end
+
+  def test_http_full_request
+    app(:streaming => false)
+    get "/"
+    assert last_response.ok?
+    assert_match(/Jacek Becela/, last_response.body)
+  end
+
+  def test_https_streaming
+    app.host = 'www.apple.com'
+    get 'https://example.com'
+    assert last_response.ok?
+    assert_match(/(itunes|iphone|ipod|mac|ipad)/, last_response.body)
+  end
+
+  def test_https_full_request
+    app(:streaming => false).host = 'www.apple.com'
+    get 'https://example.com'
+    assert last_response.ok?
+    assert_match(/(itunes|iphone|ipod|mac|ipad)/, last_response.body)
   end
 
   def test_header_reconstruction
