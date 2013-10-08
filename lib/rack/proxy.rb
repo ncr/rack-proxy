@@ -52,14 +52,15 @@ module Rack
       end
 
       backend = @backend || source_request
+      use_ssl = backend.scheme == "https"
 
       # Create the response
       if @streaming
         # streaming response (the actual network communication is deferred, a.k.a. streamed)
         target_response = HttpStreamingResponse.new(target_request, backend.host, backend.port)
-        target_response.use_ssl = backend.scheme == "https"
+        target_response.use_ssl = use_ssl
       else
-        target_response = Net::HTTP.start(backend.host, backend.port, :use_ssl => backend.scheme == "https") do |http|
+        target_response = Net::HTTP.start(backend.host, backend.port, :use_ssl => use_ssl) do |http|
           http.request(target_request)
         end
       end
