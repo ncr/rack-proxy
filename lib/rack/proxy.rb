@@ -59,7 +59,7 @@ module Rack
         target_response = HttpStreamingResponse.new(target_request, backend.host, backend.port)
         target_response.use_ssl = backend.scheme == "https"
       else
-        target_response = Net::HTTP.start(backend.host, backend.port) do |http|
+        target_response = Net::HTTP.start(backend.host, backend.port, :use_ssl => backend.scheme == "https") do |http|
           http.request(target_request)
         end
       end
