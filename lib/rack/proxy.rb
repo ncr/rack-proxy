@@ -5,7 +5,7 @@ module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.5.5"
+    VERSION = "0.5.6"
 
     # @option opts [String, URI::HTTP] :backend Backend host to proxy requests to
     def initialize(opts={})
@@ -49,7 +49,11 @@ module Rack
         target_request.body_stream    = source_request.body
         target_request.content_length = source_request.content_length.to_i
         target_request.content_type   = source_request.content_type if source_request.content_type
+        target_request.body_stream.rewind
       end
+
+      # Create a streaming response (the actual network communication is deferred, a.k.a. streamed)
+      target_response = HttpStreamingResponse.new(target_request, source_request.host, source_request.port)
 
       backend = @backend || source_request
       use_ssl = backend.scheme == "https"
