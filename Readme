@@ -34,6 +34,10 @@ class TrustingProxy < Rack::Proxy
 
 end
 
+The same can be achieved for *all* requests going through the `Rack::Proxy` instance by using
+
+    Rack::Proxy.new(ssl_verify_none: true)
+
 See tests for more examples.
 
 WARNING: Doesn't work with fakeweb/webmock. Both libraries monkey-patch net/http code.

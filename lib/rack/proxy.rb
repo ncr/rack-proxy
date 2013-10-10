@@ -10,6 +10,7 @@ module Rack
     # @option opts [String, URI::HTTP] :backend Backend host to proxy requests to
     def initialize(opts={})
       @streaming = opts.fetch(:streaming, true)
+      @ssl_verify_none = opts.fetch(:ssl_verify_none, false)
       @backend = URI(opts[:backend]) if opts[:backend]
     end
 
@@ -57,7 +58,7 @@ module Rack
 
       backend = @backend || source_request
       use_ssl = backend.scheme == "https"
-      ssl_verify_none = env.delete('rack.ssl_verify_none') == true
+      ssl_verify_none = (env.delete('rack.ssl_verify_none') || @ssl_verify_none) == true
 
       # Create the response
       if @streaming
