@@ -5,6 +5,7 @@ module Rack
   # Wraps the hacked net/http in a Rack way.
   class HttpStreamingResponse
     attr_accessor :use_ssl
+    attr_accessor :verify_mode
 
     def initialize(request, host, port = nil)
       @request, @host, @port = request, host, port
@@ -61,6 +62,7 @@ module Rack
       @session ||= begin
         http = Net::HTTP.new @host, @port
         http.use_ssl = self.use_ssl
+        http.verify_mode = self.verify_mode
         http.start
       end
     end
