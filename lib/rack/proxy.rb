@@ -5,7 +5,7 @@ module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.5.7"
+    VERSION = "0.5.8"
 
     # @option opts [String, URI::HTTP] :backend Backend host to proxy requests to
     def initialize(opts={})
