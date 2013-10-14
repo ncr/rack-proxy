@@ -22,6 +22,22 @@ class Foo < Rack::Proxy
 
 end
 
+Example: disable SSL session verification when proxying a server with e.g. self-signed SSL certs
+
+class TrustingProxy < Rack::Proxy
+
+  def rewrite_env(env)
+    env["rack.ssl_verify_none"] = true
+
+    env
+  end
+
+end
+
+The same can be achieved for *all* requests going through the `Rack::Proxy` instance by using
+
+    Rack::Proxy.new(ssl_verify_none: true)
+
 See tests for more examples.
 
 WARNING: Doesn't work with fakeweb/webmock. Both libraries monkey-patch net/http code.
