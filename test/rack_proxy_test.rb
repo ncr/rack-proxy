@@ -28,6 +28,13 @@ class RackProxyTest < Test::Unit::TestCase
     assert_match(/Jacek Becela/, last_response.body)
   end
 
+  def test_http_full_request_headers
+    app(:streaming => false)
+    app.host = 'www.google.com'
+    get "/"
+    assert !Array(last_response['Set-Cookie']).empty?, 'Google always sets a cookie, yo. Where my cookies at?!'
+  end
+
   def test_https_streaming
     app.host = 'www.apple.com'
     get 'https://example.com'
