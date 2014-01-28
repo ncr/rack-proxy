@@ -7,6 +7,30 @@ module Rack
   class Proxy
     VERSION = "0.5.9"
 
+    class << self
+      def extract_http_request_headers(env)
+        headers = env.reject do |k, v|
+          !(/^HTTP_[A-Z_]+$/ === k) || v.nil?
+        end.map do |k, v|
+          [reconstruct_header_name(k), v]
+        end.inject(Utils::HeaderHash.new) do |hash, k_v|
+          k, v = k_v
+          hash[k] = v
+          hash
+        end
+
+        x_forwarded_for = (headers["X-Forwarded-For"].to_s.split(/, +/) << env["REMOTE_ADDR"]).join(", ")
+
+        headers.merge!("X-Forwarded-For" =>  x_forwarded_for)
+      end
+
+      protected
+
+      def reconstruct_header_name(name)
+        name.sub(/^HTTP_/, "").gsub("_", "-")
+      end
+    end
+
     # @option opts [String, URI::HTTP] :backend Backend host to proxy requests to
     def initialize(opts={})
       @streaming = opts.fetch(:streaming, true)
@@ -43,7 +67,7 @@ module Rack
       target_request = Net::HTTP.const_get(source_request.request_method.capitalize).new(full_path)
 
       # Setup headers
-      target_request.initialize_http_header(extract_http_request_headers(source_request.env))
+      target_request.initialize_http_header(self.class.extract_http_request_headers(source_request.env))
 
       # Setup body
       if target_request.request_body_permitted? && source_request.body
@@ -78,26 +102,6 @@ module Rack
       body    = [body] unless body.respond_to?(:each)
 
       [target_response.code, headers, body]
-    end
-
-    def extract_http_request_headers(env)
-      headers = env.reject do |k, v|
-        !(/^HTTP_[A-Z_]+$/ === k) || v.nil?
-      end.map do |k, v|
-        [reconstruct_header_name(k), v]
-      end.inject(Utils::HeaderHash.new) do |hash, k_v|
-        k, v = k_v
-        hash[k] = v
-        hash
-      end
-
-      x_forwarded_for = (headers["X-Forwarded-For"].to_s.split(/, +/) << env["REMOTE_ADDR"]).join(", ")
-
-      headers.merge!("X-Forwarded-For" =>  x_forwarded_for)
-    end
-
-    def reconstruct_header_name(name)
-      name.sub(/^HTTP_/, "").gsub("_", "-")
     end
 
   end

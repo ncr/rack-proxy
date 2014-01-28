@@ -50,24 +50,24 @@ class RackProxyTest < Test::Unit::TestCase
   end
 
   def test_header_reconstruction
-    proxy = Rack::Proxy.new
+    proxy_class = Rack::Proxy
 
-    header = proxy.send(:reconstruct_header_name, "HTTP_ABC")
+    header = proxy_class.send(:reconstruct_header_name, "HTTP_ABC")
     assert header == "ABC"
 
-    header = proxy.send(:reconstruct_header_name, "HTTP_ABC_D")
+    header = proxy_class.send(:reconstruct_header_name, "HTTP_ABC_D")
     assert header == "ABC-D"
   end
 
   def test_extract_http_request_headers
-    proxy = Rack::Proxy.new
+    proxy_class = Rack::Proxy
     env = {
       'NOT-HTTP-HEADER' => 'test-value',
       'HTTP_ACCEPT' => 'text/html',
       'HTTP_CONNECTION' => nil
     }
 
-    headers = proxy.send(:extract_http_request_headers, env)
+    headers = proxy_class.extract_http_request_headers(env)
     assert headers.key?('ACCEPT')
     assert !headers.key?('CONNECTION')
     assert !headers.key?('NOT-HTTP-HEADER')
