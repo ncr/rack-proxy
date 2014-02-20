@@ -55,6 +55,7 @@ module Rack
     protected
 
     def perform_request(env)
+
       source_request = Rack::Request.new(env)
 
       # Initialize request
@@ -97,7 +98,13 @@ module Rack
         end
       end
 
-      headers = (target_response.respond_to?(:headers) && target_response.headers) || target_response.to_hash
+      if target_response.respond_to?(:headers) then
+        headers =  target_response.headers
+      else  
+        headers = target_response.to_hash
+        headers.each {|k, v| headers[k] = if v.is_a? Array then v.first else v end }
+      end
+
       body    = target_response.body
       body    = [body] unless body.respond_to?(:each)
 
