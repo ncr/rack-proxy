@@ -105,7 +105,7 @@ module Rack
         headers.each {|k, v| headers[k] = if v.is_a? Array then v.first else v end }
       end
 
-      body    = target_response.body
+      body    = target_response.body || [""]
       body    = [body] unless body.respond_to?(:each)
 
       [target_response.code, headers, body]
