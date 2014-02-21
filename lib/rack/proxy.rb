@@ -105,7 +105,7 @@ module Rack
       end
 
       headers = (target_response.respond_to?(:headers) && target_response.headers) || self.class.normalize_headers(target_response.to_hash)
-      body    = target_response.body
+      body    = target_response.body || [""]
       body    = [body] unless body.respond_to?(:each)
 
       [target_response.code, headers, body]
