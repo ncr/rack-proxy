@@ -98,8 +98,9 @@ module Rack
         target_response.use_ssl = use_ssl
         target_response.verify_mode = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
       else
-        target_response = Net::HTTP.start(backend.host, backend.port, :use_ssl => use_ssl) do |http|
-          http.verify_mode = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
+        start_opts = use_ssl ? {:use_ssl => use_ssl} : {}
+        start_opts[:verify_mode] = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
+        target_response = Net::HTTP.start(backend.host, backend.port, start_opts) do |http|
           http.request(target_request)
         end
       end
