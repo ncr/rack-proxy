@@ -84,9 +84,6 @@ module Rack
         target_request.body_stream.rewind
       end
 
-      # Create a streaming response (the actual network communication is deferred, a.k.a. streamed)
-      target_response = HttpStreamingResponse.new(target_request, source_request.host, source_request.port)
-
       backend = @backend || source_request
       use_ssl = backend.scheme == "https"
       ssl_verify_none = (env.delete('rack.ssl_verify_none') || @ssl_verify_none) == true
