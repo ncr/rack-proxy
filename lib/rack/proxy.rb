@@ -26,7 +26,7 @@ module Rack
 
       def normalize_headers(headers)
         mapped = headers.map do|k, v| 
-          [k, if v.is_a? Array then v.first else v end]
+          [k, if v.is_a? Array then v.join("\n") else v end]
         end
         Hash[mapped]
       end
