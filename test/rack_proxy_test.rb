@@ -73,6 +73,15 @@ class RackProxyTest < Test::Unit::TestCase
     assert !headers.key?('NOT-HTTP-HEADER')
   end
 
+  def test_duplicate_headers
+    proxy_class = Rack::Proxy
+    env = { 'Set-Cookie' => ["cookie1=foo", "cookie2=bar"] }
+
+    headers = proxy_class.normalize_headers(env)
+    assert headers['Set-Cookie'].include?('cookie2'), "Join multiple cookies with newlines"
+  end
+
+
   def test_handles_missing_content_length
     assert_nothing_thrown do
       post "/", nil, "CONTENT_LENGTH" => nil
