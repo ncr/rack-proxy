@@ -5,7 +5,7 @@ module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.5.13"
+    VERSION = "0.5.14"
 
     class << self
       def extract_http_request_headers(env)
@@ -43,6 +43,7 @@ module Rack
       @streaming = opts.fetch(:streaming, true)
       @ssl_verify_none = opts.fetch(:ssl_verify_none, false)
       @backend = URI(opts[:backend]) if opts[:backend]
+      @read_timeout = opts.fetch(:read_timeout, 60)
     end
 
     def call(env)
@@ -87,12 +88,14 @@ module Rack
       backend = @backend || source_request
       use_ssl = backend.scheme == "https"
       ssl_verify_none = (env.delete('rack.ssl_verify_none') || @ssl_verify_none) == true
+      read_timeout = env.delete('http.read_timeout') || @read_timeout
 
       # Create the response
       if @streaming
         # streaming response (the actual network communication is deferred, a.k.a. streamed)
         target_response = HttpStreamingResponse.new(target_request, backend.host, backend.port)
         target_response.use_ssl = use_ssl
+        target_response.read_timeout = read_timeout
         target_response.verify_mode = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
       else
         start_opts = use_ssl ? {:use_ssl => use_ssl} : {}
