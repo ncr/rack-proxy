@@ -41,3 +41,5 @@ The same can be achieved for *all* requests going through the `Rack::Proxy` inst
 See tests for more examples.
 
 WARNING: Doesn't work with fakeweb/webmock. Both libraries monkey-patch net/http code.
+
+TODO: Make the docs up to date with the current use case for this code: everything except streaming which involved a rather ugly monkey patch and only worked in 1.8, but does not work now.
