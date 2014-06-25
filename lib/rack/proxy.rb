@@ -85,7 +85,7 @@ module Rack
         target_request.body_stream.rewind
       end
 
-      backend = @backend || source_request
+      backend = env.delete('rack.backend') || @backend || source_request
       use_ssl = backend.scheme == "https"
       ssl_verify_none = (env.delete('rack.ssl_verify_none') || @ssl_verify_none) == true
       read_timeout = env.delete('http.read_timeout') || @read_timeout
