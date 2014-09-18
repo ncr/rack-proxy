@@ -25,10 +25,10 @@ module Rack
       end
 
       def normalize_headers(headers)
-        mapped = headers.map do|k, v| 
+        mapped = headers.map do |k, v|
           [k, if v.is_a? Array then v.join("\n") else v end]
         end
-        Hash[mapped]
+        Utils::HeaderHash.new Hash[mapped]
       end
 
       protected

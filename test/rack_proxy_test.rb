@@ -49,6 +49,16 @@ class RackProxyTest < Test::Unit::TestCase
     assert_match(/(itunes|iphone|ipod|mac|ipad)/, last_response.body)
   end
 
+  def test_normalize_headers
+    proxy_class = Rack::Proxy
+    headers = { 'header_array' => ['first_entry'], 'header_non_array' => :entry }
+
+    normalized_headers = proxy_class.send(:normalize_headers, headers)
+    assert normalized_headers.instance_of?(Rack::Utils::HeaderHash)
+    assert normalized_headers['header_array'] == 'first_entry'
+    assert normalized_headers['header_non_array'] == :entry
+  end
+
   def test_header_reconstruction
     proxy_class = Rack::Proxy
 
