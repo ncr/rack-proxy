@@ -100,6 +100,7 @@ module Rack
       else
         start_opts = use_ssl ? {:use_ssl => use_ssl} : {}
         start_opts[:verify_mode] = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
+        start_opts[:read_timeout] = read_timeout
         target_response = Net::HTTP.start(backend.host, backend.port, start_opts) do |http|
           http.request(target_request)
         end
