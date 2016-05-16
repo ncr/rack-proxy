@@ -5,7 +5,7 @@ module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.5.17"
+    VERSION = "0.5.18"
 
     class << self
       def extract_http_request_headers(env)
@@ -44,6 +44,7 @@ module Rack
       @ssl_verify_none = opts.fetch(:ssl_verify_none, false)
       @backend = URI(opts[:backend]) if opts[:backend]
       @read_timeout = opts.fetch(:read_timeout, 60)
+      @ssl_version = opts[:ssl_version] if opts[:ssl_version]
     end
 
     def call(env)
@@ -97,11 +98,15 @@ module Rack
         target_response.use_ssl = use_ssl
         target_response.read_timeout = read_timeout
         target_response.verify_mode = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
+        target_response.ssl_version = @ssl_version
       else
         start_opts = use_ssl ? {:use_ssl => use_ssl} : {}
         start_opts[:verify_mode] = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
         start_opts[:read_timeout] = read_timeout
+        start_opts[:ssl_version] = @ssl_version
+#        http = Net::HTTP.new(backend.host, backend.port)
         target_response = Net::HTTP.start(backend.host, backend.port, start_opts) do |http|
+          http.ssl_version = @ssl_version if @ssl_version
           http.request(target_request)
         end
       end
