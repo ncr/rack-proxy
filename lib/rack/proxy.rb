@@ -98,14 +98,15 @@ module Rack
         target_response.use_ssl = use_ssl
         target_response.read_timeout = read_timeout
         target_response.verify_mode = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
-        target_response.ssl_version = @ssl_version
+        target_response.ssl_version = @ssl_version if @ssl_version
       else
-        start_opts = use_ssl ? {:use_ssl => use_ssl} : {}
-        start_opts[:verify_mode] = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
-        start_opts[:read_timeout] = read_timeout
-        start_opts[:ssl_version] = @ssl_version if @ssl_version
+        serial = Net::HTTP.new(backend.host, backend.port)
+        serial.use_ssl = use_ssl if use_ssl
+        serial.read_timeout = read_timeout
+        serial.verify_mode = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
+        serial.ssl_version = @ssl_version if @ssl_version
 
-        target_response = Net::HTTP.start(backend.host, backend.port, start_opts) do |http|
+        target_response = serial.start() do |http|
           http.request(target_request)
         end
       end

@@ -66,11 +66,7 @@ module Rack
         http.use_ssl = self.use_ssl
         http.verify_mode = self.verify_mode
         http.read_timeout = self.read_timeout
-        if self.use_ssl
-          if OpenSSL::SSL::SSLContext::METHODS.include? self.ssl_version
-            http.ssl_version = self.ssl_version
-          end
-        end
+        http.ssl_version = self.ssl_version if self.use_ssl
         http.start
       end
     end
