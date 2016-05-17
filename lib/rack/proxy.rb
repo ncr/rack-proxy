@@ -42,9 +42,9 @@ module Rack
     def initialize(opts = {})
       @streaming = opts.fetch(:streaming, true)
       @ssl_verify_none = opts.fetch(:ssl_verify_none, false)
-      @backend = opts[:backend] ? URI(opts[:backend]) : nil
+      @backend = URI(opts[:backend]) if opts[:backend]
       @read_timeout = opts.fetch(:read_timeout, 60)
-      @ssl_version = opts[:ssl_version] ? opts[:ssl_version] : nil
+      @ssl_version = opts[:ssl_version] if opts[:ssl_version]
     end
 
     def call(env)
@@ -100,13 +100,13 @@ module Rack
         target_response.verify_mode = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
         target_response.ssl_version = @ssl_version if @ssl_version
       else
-        serial = Net::HTTP.new(backend.host, backend.port)
-        serial.use_ssl = use_ssl if use_ssl
-        serial.read_timeout = read_timeout
-        serial.verify_mode = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
-        serial.ssl_version = @ssl_version if @ssl_version
+        http = Net::HTTP.new(backend.host, backend.port)
+        http.use_ssl = use_ssl if use_ssl
+        http.read_timeout = read_timeout
+        http.verify_mode = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
+        http.ssl_version = @ssl_version if @ssl_version
 
-        target_response = serial.start() do |http|
+        target_response = http.start do
           http.request(target_request)
         end
       end
