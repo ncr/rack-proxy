@@ -42,8 +42,22 @@ class RackProxyTest < Test::Unit::TestCase
     assert_match(/(itunes|iphone|ipod|mac|ipad)/, last_response.body)
   end
 
+  def test_https_streaming_tls
+    app(:ssl_version => :TLSv1).host = 'www.apple.com'
+    get 'https://example.com'
+    assert last_response.ok?
+    assert_match(/(itunes|iphone|ipod|mac|ipad)/, last_response.body)
+  end
+
   def test_https_full_request
     app(:streaming => false).host = 'www.apple.com'
+    get 'https://example.com'
+    assert last_response.ok?
+    assert_match(/(itunes|iphone|ipod|mac|ipad)/, last_response.body)
+  end
+
+  def test_https_full_request_tls
+    app({:streaming => false, :ssl_version => :TLSv1}).host = 'www.apple.com'
     get 'https://example.com'
     assert last_response.ok?
     assert_match(/(itunes|iphone|ipod|mac|ipad)/, last_response.body)

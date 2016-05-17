@@ -33,7 +33,6 @@ class HttpStreamingResponseTest < Test::Unit::TestCase
       assert chunk.is_a?(String)
     end
 
-
   end
 
   def test_to_s

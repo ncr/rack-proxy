@@ -42,9 +42,9 @@ module Rack
     def initialize(opts = {})
       @streaming = opts.fetch(:streaming, true)
       @ssl_verify_none = opts.fetch(:ssl_verify_none, false)
-      @backend = URI(opts[:backend]) if opts[:backend]
+      @backend = opts[:backend] ? URI(opts[:backend]) : nil
       @read_timeout = opts.fetch(:read_timeout, 60)
-      @ssl_version = opts[:ssl_version] if opts[:ssl_version]
+      @ssl_version = opts[:ssl_version] ? opts[:ssl_version] : nil
     end
 
     def call(env)
@@ -103,10 +103,9 @@ module Rack
         start_opts = use_ssl ? {:use_ssl => use_ssl} : {}
         start_opts[:verify_mode] = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
         start_opts[:read_timeout] = read_timeout
-        start_opts[:ssl_version] = @ssl_version
-#        http = Net::HTTP.new(backend.host, backend.port)
+        start_opts[:ssl_version] = @ssl_version if @ssl_version
+
         target_response = Net::HTTP.start(backend.host, backend.port, start_opts) do |http|
-          http.ssl_version = @ssl_version if @ssl_version
           http.request(target_request)
         end
       end
