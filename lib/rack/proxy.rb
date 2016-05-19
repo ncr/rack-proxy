@@ -41,6 +41,7 @@ module Rack
     # @option opts [String, URI::HTTP] :backend Backend host to proxy requests to
     def initialize(app = nil, opts= {})
       @app = app
+      opts = app.is_a?(Hash) ? app : opts
       @streaming = opts.fetch(:streaming, true)
       @ssl_verify_none = opts.fetch(:ssl_verify_none, false)
       @backend = URI(opts[:backend]) if opts[:backend]
@@ -106,7 +107,6 @@ module Rack
         http.read_timeout = read_timeout
         http.verify_mode = OpenSSL::SSL::VERIFY_NONE if use_ssl && ssl_verify_none
         http.ssl_version = @ssl_version if @ssl_version
-        http.set_debug_output($stdout)
 
         target_response = http.start do
           http.request(target_request)
