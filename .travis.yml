@@ -5,6 +5,7 @@ before_install:
   - "echo 'gem: --no-ri --no-rdoc' > ~/.gemrc"
   - gem install bundler
   - gem update bundler
+script: bundle exec rake test
 rvm:
   - 2.0.0
   - 2.1.5
