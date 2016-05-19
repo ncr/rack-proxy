@@ -39,7 +39,13 @@ module Rack
     end
 
     # @option opts [String, URI::HTTP] :backend Backend host to proxy requests to
-    def initialize(opts = {})
+    def initialize(app = nil, opts= {})
+      if app.is_a?(Hash)
+        opts = app
+        @app = nil
+      else
+        @app = app
+      end
       @streaming = opts.fetch(:streaming, true)
       @ssl_verify_none = opts.fetch(:ssl_verify_none, false)
       @backend = URI(opts[:backend]) if opts[:backend]
