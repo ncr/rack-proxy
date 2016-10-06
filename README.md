@@ -1,5 +1,20 @@
 A request/response rewriting HTTP proxy. A Rack app. Subclass `Rack::Proxy` and provide your `rewrite_env` and `rewrite_response` methods.
 
+Installation
+-------
+
+Add the following to your Gemfile:
+
+```
+gem 'rack-proxy', '~> 0.6.0'
+```
+
+Or install:
+
+```
+gem install rack-proxy
+```
+
 Example
 -------
 
