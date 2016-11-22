@@ -121,6 +121,9 @@ module Rack
       body    = target_response.body || [""]
       body    = [body] unless body.respond_to?(:each)
 
+      # According to https://tools.ietf.org/html/draft-ietf-httpbis-p1-messaging-14#section-7.1.3.1Acc
+      # should remove hop-by-hop header fields
+      headers.reject! { |k| ['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade'].include? k.downcase }
       [target_response.code, headers, body]
     end
 
