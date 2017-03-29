@@ -38,6 +38,7 @@ module Rack
       response.read_body(&block)
     ensure
       session.end_request_hacked
+      session.finish
     end
 
     def to_s
