@@ -6,7 +6,7 @@ Installation
 Add the following to your Gemfile:
 
 ```
-gem 'rack-proxy', '~> 0.6.0'
+gem 'rack-proxy', '~> 0.6.2'
 ```
 
 Or install:

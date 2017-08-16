@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    rack-proxy (0.6.1)
+    rack-proxy (0.6.2)
       rack
 
 GEM
@@ -25,4 +25,4 @@ DEPENDENCIES
   test-unit
 
 BUNDLED WITH
-   1.14.6
+   1.15.1
