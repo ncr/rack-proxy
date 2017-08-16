@@ -115,4 +115,10 @@ class RackProxyTest < Test::Unit::TestCase
       post "/", nil, "CONTENT_LENGTH" => nil
     end
   end
+
+  def test_response_header_included_Hop_by_hop
+    app({:streaming => true}).host = 'auth.goeasyship.com'
+    get 'https://example.com/oauth2/token/info?access_token=123'
+    assert !last_response.headers.key?('transfer-encoding')
+  end
 end
