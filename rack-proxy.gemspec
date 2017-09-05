@@ -8,7 +8,7 @@ Gem::Specification.new do |s|
   s.platform    = Gem::Platform::RUBY
   s.authors     = ["Jacek Becela"]
   s.email       = ["jacek.becela@gmail.com"]
-  s.homepage    = "http://rubygems.org/gems/rack-proxy"
+  s.homepage    = "https://github.com/ncr/rack-proxy"
   s.summary     = %q{A request/response rewriting HTTP proxy. A Rack app.}
   s.description = %q{A Rack app that provides request/response rewriting proxy capabilities with streaming.}
 
