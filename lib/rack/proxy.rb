@@ -117,7 +117,7 @@ module Rack
         end
       end
 
-      headers = (target_response.respond_to?(:headers) && target_response.headers) || self.class.normalize_headers(target_response.to_hash)
+      headers = self.class.normalize_headers(target_response.respond_to?(:headers) ? target_response.headers : target_response.to_hash)
       body    = target_response.body || [""]
       body    = [body] unless body.respond_to?(:each)
 
