@@ -17,7 +17,8 @@ gem install rack-proxy
 
 Use Cases
 ----
-Below are some examples of real world use cases for Rack-Proxy, done something interesting add the list below and send a PR.
+
+Below are some examples of real world use cases for Rack-Proxy. If you have done something interesting, add it to the list below and send a PR.
 
 * Allowing one app to act as central trust authority
   * handle accepting self-sign certificates for internal apps
