@@ -232,6 +232,71 @@ This will allow to run the other requests through the application and only proxy
 
 See tests for more examples.
 
+### SSL proxy for SpringBoot applications debugging
+
+Whenever you need to debug communication with external services with HTTPS protocol (like OAuth based) you have to be able to access to your local web app through HTTPS protocol too. Typical way is to use nginx or Apache httpd as a reverse proxy but it might be inconvinuent for development environment. Simple proxy server is a better way in this case. The only what we need is to unpack incoming SSL queries and proxy them to a backend. We can prepare minimal set of files to create autonomous proxy server.
+
+Create `config.ru` file:
+```ruby
+#
+# config.ru
+#
+require 'rack'
+require 'rack-proxy'
+
+class ForwardHost < Rack::Proxy
+  def rewrite_env(env)
+    env['HTTP_X_FORWARDED_HOST'] = env['SERVER_NAME']
+    env['HTTP_X_FORWARDED_PROTO'] = env['rack.url_scheme']
+    env
+  end
+end
+
+run ForwardHost.new(backend: 'http://localhost:8080')
+```
+
+Create `Gemfile` file:
+```ruby
+source "https://rubygems.org"
+
+gem 'thin'
+gem 'rake'
+gem 'rack-proxy'
+```
+
+Create `config.yml` file with configuration of web server `thin`:
+```yml
+---
+ssl: true
+ssl-key-file: keys/domain.key
+ssl-cert-file: keys/domain.crt
+ssl-disable-verify: false
+```
+
+Create 'keys' directory and generate SSL key and certificates files `domain.key` and `domain.crt`
+
+Run `bundle exec thin start` for running it with `thin`'s default port.
+
+Or use `sudo -E thin start -C config.yml -p 443` for running with default for `https://` port.
+
+Don't forget to enable processing of `X-Forwarded-...` headers on your application side. Just add following strings to your `resources/application.yml` file.
+```yml
+---
+server:
+  tomcat:
+    remote-ip-header: x-forwarded-for
+    protocol-header:  x-forwarded-proto
+  use-forward-headers:  true
+```
+
+Add some domain name like `debug.your_app.com` into your local `/etc/hosts` file like
+```
+127.0.0.1	debug.your_app.com
+```
+
+Next start the proxy and your app. And now you can access to your Spring application through SSL connection via `https://debug.your_app.com` URI in a browser.
+
+
 WARNING
 ----
 
