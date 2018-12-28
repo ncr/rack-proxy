@@ -51,6 +51,8 @@ module Rack
       @backend = URI(opts[:backend]) if opts[:backend]
       @read_timeout = opts.fetch(:read_timeout, 60)
       @ssl_version = opts[:ssl_version] if opts[:ssl_version]
+      @username = opts[:username] if opts[:username]
+      @password = opts[:password] if opts[:password]
     end
 
     def call(env)
@@ -91,6 +93,9 @@ module Rack
         target_request.content_type   = source_request.content_type if source_request.content_type
         target_request.body_stream.rewind
       end
+
+      # Use basic auth if we have to
+      target_request.basic_auth(@username, @password) if @username && @password
 
       backend = env.delete('rack.backend') || @backend || source_request
       use_ssl = backend.scheme == "https"
