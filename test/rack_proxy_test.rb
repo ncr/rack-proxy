@@ -89,12 +89,14 @@ class RackProxyTest < Test::Unit::TestCase
       'NOT-HTTP-HEADER' => 'test-value',
       'HTTP_ACCEPT' => 'text/html',
       'HTTP_CONNECTION' => nil,
-      'HTTP_CONTENT_MD5' => 'deadbeef'
+      'HTTP_CONTENT_MD5' => 'deadbeef',
+      'HTTP_HEADER.WITH.PERIODS' => 'stillmooing'
     }
 
     headers = proxy_class.extract_http_request_headers(env)
     assert headers.key?('ACCEPT')
     assert headers.key?('CONTENT-MD5')
+    assert headers.key?('HEADER.WITH.PERIODS')
     assert !headers.key?('CONNECTION')
     assert !headers.key?('NOT-HTTP-HEADER')
   end
