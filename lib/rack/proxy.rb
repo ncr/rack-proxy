@@ -51,6 +51,7 @@ module Rack
       @backend = URI(opts[:backend]) if opts[:backend]
       @read_timeout = opts.fetch(:read_timeout, 60)
       @ssl_version = opts[:ssl_version] if opts[:ssl_version]
+      @opts = opts
     end
 
     def call(env)
