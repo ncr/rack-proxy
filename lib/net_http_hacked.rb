@@ -4,7 +4,7 @@
 #
 # [status, headers, streamable_body]
 #
-# See http://github.com/aniero/rack-streaming-proxy
+# See http://github.com/zerowidth/rack-streaming-proxy
 # for alternative that uses additional process.
 #
 # BTW I don't like monkey patching either
