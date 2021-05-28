@@ -17,7 +17,6 @@ class RackProxyTest < Test::Unit::TestCase
 
   def test_http_streaming
     get "/"
-    puts last_response.inspect
     assert last_response.ok?
 
     assert_match(/Example Domain/, last_response.body)
