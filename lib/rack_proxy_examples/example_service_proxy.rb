@@ -5,7 +5,7 @@
 # 1. rails new test_app
 # 2. cd test_app
 # 3. install Rack-Proxy in `Gemfile`
-#    a. `gem 'rack-proxy', '~> 0.6.6'`
+#    a. `gem 'rack-proxy', '~> 0.7.0'`
 # 4. install gem: `bundle install`
 # 5. create `config/initializers/proxy.rb` adding this line `require 'rack_proxy_examples/example_service_proxy'`
 # 6. run: `SERVICE_URL=http://guides.rubyonrails.org rails server`
