@@ -70,10 +70,19 @@ module Rack
 
     # Return a rack triplet [status, headers, body]
     def rewrite_response(triplet)
+      default_rewrite_response(triplet)
       triplet
     end
 
     protected
+
+    def default_rewrite_response(triplet)
+      status, headers, body = triplet
+      # prepare set-cookie headers
+
+      headers['Set-Cookie'] =  headers['Set-Cookie'].join("\n") if headers['Set-Cookie']
+      triplet
+    end
 
     def perform_request(env)
       source_request = Rack::Request.new(env)
