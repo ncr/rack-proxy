@@ -5,7 +5,7 @@ PATH
       rack
 
 GEM
-  remote: http://rubygems.org/
+  remote: https://rubygems.org/
   specs:
     power_assert (0.2.6)
     rack (2.2.3)

@@ -46,13 +46,13 @@ module Rack
       else
         @app = app
       end
-      
+
       @streaming = opts.fetch(:streaming, true)
       @ssl_verify_none = opts.fetch(:ssl_verify_none, false)
       @backend = URI(opts[:backend]) if opts[:backend]
       @read_timeout = opts.fetch(:read_timeout, 60)
       @ssl_version = opts[:ssl_version] if opts[:ssl_version]
-      
+
       @username = opts[:username] if opts[:username]
       @password = opts[:password] if opts[:password]
 
@@ -70,19 +70,10 @@ module Rack
 
     # Return a rack triplet [status, headers, body]
     def rewrite_response(triplet)
-      default_rewrite_response(triplet)
       triplet
     end
 
     protected
-
-    def default_rewrite_response(triplet)
-      status, headers, body = triplet
-      # prepare set-cookie headers
-
-      headers['Set-Cookie'] =  headers['Set-Cookie'].join("\n") if headers['Set-Cookie']
-      triplet
-    end
 
     def perform_request(env)
       source_request = Rack::Request.new(env)
