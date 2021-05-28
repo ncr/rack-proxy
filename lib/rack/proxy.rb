@@ -46,13 +46,17 @@ module Rack
       else
         @app = app
       end
+      
       @streaming = opts.fetch(:streaming, true)
       @ssl_verify_none = opts.fetch(:ssl_verify_none, false)
       @backend = URI(opts[:backend]) if opts[:backend]
       @read_timeout = opts.fetch(:read_timeout, 60)
       @ssl_version = opts[:ssl_version] if opts[:ssl_version]
+      
       @username = opts[:username] if opts[:username]
       @password = opts[:password] if opts[:password]
+
+      @opts = opts
     end
 
     def call(env)
