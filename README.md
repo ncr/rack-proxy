@@ -6,7 +6,7 @@ Installation
 Add the following to your `Gemfile`:
 
 ```
-gem 'rack-proxy', '~> 0.6.4'
+gem 'rack-proxy', '~> 0.6.6'
 ```
 
 Or install:
@@ -17,7 +17,8 @@ gem install rack-proxy
 
 Use Cases
 ----
-Below are some examples of real world use cases for Rack-Proxy, done something interesting add the list below and send a PR.
+
+Below are some examples of real world use cases for Rack-Proxy. If you have done something interesting, add it to the list below and send a PR.
 
 * Allowing one app to act as central trust authority
   * handle accepting self-sign certificates for internal apps
@@ -25,7 +26,7 @@ Below are some examples of real world use cases for Rack-Proxy, done something i
   * avoiding CORs complications by proxying from same domain to another backend
 * subdomain based pass-through to multiple apps
 * Complex redirect rules
-   * redirect pages with different extensions (ex: `.php`) to another app 
+   * redirect pages with different extensions (ex: `.php`) to another app
    * useful for handling awkward redirection rules for moved pages
 * fan Parallel Requests: turning a single API request to [multiple concurrent backend requests](https://github.com/typhoeus/typhoeus#making-parallel-requests) & merging results.
 * inserting or stripping headers required or problematic for certain clients
@@ -76,7 +77,7 @@ class ForwardHost < Rack::Proxy
 
     # example of inserting an additional header
     headers["X-Foo"] = "Bar"
-    
+
     # if you rewrite env, it appears that content-length isn't calculated correctly
     # resulting in only partial responses being sent to users
     # you can remove it or recalculate it here
@@ -98,14 +99,14 @@ class TrustingProxy < Rack::Proxy
   def rewrite_env(env)
     env["HTTP_HOST"] = "self-signed.badssl.com"
 
-    # We are going to trust the self-signed SSL 
+    # We are going to trust the self-signed SSL
     env["rack.ssl_verify_none"] = true
     env
   end
 
   def rewrite_response(triplet)
     status, headers, body = triplet
-    
+
     # if you rewrite env, it appears that content-length isn't calculated correctly
     # resulting in only partial responses being sent to users
     # you can remove it or recalculate it here
@@ -130,12 +131,12 @@ Test with `require 'rack_proxy_examples/example_service_proxy'`
 ```ruby
 ###
 # This is an example of how to use Rack-Proxy in a Rails application.
-#  
+#
 # Setup:
-# 1. rails new test_app 
+# 1. rails new test_app
 # 2. cd test_app
 # 3. install Rack-Proxy in `Gemfile`
-#    a. `gem 'rack-proxy', '~> 0.6.3'`
+#    a. `gem 'rack-proxy', '~> 0.6.6'`
 # 4. install gem: `bundle install`
 # 5. create `config/initializers/proxy.rb` adding this line `require 'rack_proxy_examples/example_service_proxy'`
 # 6. run: `SERVICE_URL=http://guides.rubyonrails.org rails server`
@@ -157,7 +158,7 @@ class ExampleServiceProxy < Rack::Proxy
 
         # This is the only path that needs to be set currently on Rails 5 & greater
         env['PATH_INFO'] = ENV['SERVICE_PATH'] || '/configuring.html'
-        
+
         # don't send your sites cookies to target service, unless it is a trusted internal service that can parse all your cookies
         env['HTTP_COOKIE'] = ''
         super(env)
@@ -185,14 +186,14 @@ class RackPhpProxy < Rack::Proxy
     if request.path =~ %r{\.php}
       env["HTTP_HOST"] = ENV["HTTP_HOST"] ? URI(ENV["HTTP_HOST"]).host : "localhost"
       ENV["PHP_PATH"] ||= '/manual/en/tutorial.firstpage.php'
-       
+
       # Rails 3 & 4
       env["REQUEST_PATH"] = ENV["PHP_PATH"] || "/php/#{request.fullpath}"
       # Rails 5 and above
       env['PATH_INFO'] = ENV["PHP_PATH"] || "/php/#{request.fullpath}"
 
       env['content-length'] = nil
-      
+
       super(env)
     else
       @app.call(env)
@@ -201,7 +202,7 @@ class RackPhpProxy < Rack::Proxy
 
   def rewrite_response(triplet)
     status, headers, body = triplet
-    
+
     # if you proxy depending on the backend, it appears that content-length isn't calculated correctly
     # resulting in only partial responses being sent to users
     # you can remove it or recalculate it here
@@ -231,6 +232,71 @@ end
 This will allow to run the other requests through the application and only proxy the requests that match the condition from the middleware.
 
 See tests for more examples.
+
+### SSL proxy for SpringBoot applications debugging
+
+Whenever you need to debug communication with external services with HTTPS protocol (like OAuth based) you have to be able to access to your local web app through HTTPS protocol too. Typical way is to use nginx or Apache httpd as a reverse proxy but it might be inconvinuent for development environment. Simple proxy server is a better way in this case. The only what we need is to unpack incoming SSL queries and proxy them to a backend. We can prepare minimal set of files to create autonomous proxy server.
+
+Create `config.ru` file:
+```ruby
+#
+# config.ru
+#
+require 'rack'
+require 'rack-proxy'
+
+class ForwardHost < Rack::Proxy
+  def rewrite_env(env)
+    env['HTTP_X_FORWARDED_HOST'] = env['SERVER_NAME']
+    env['HTTP_X_FORWARDED_PROTO'] = env['rack.url_scheme']
+    env
+  end
+end
+
+run ForwardHost.new(backend: 'http://localhost:8080')
+```
+
+Create `Gemfile` file:
+```ruby
+source "https://rubygems.org"
+
+gem 'thin'
+gem 'rake'
+gem 'rack-proxy'
+```
+
+Create `config.yml` file with configuration of web server `thin`:
+```yml
+---
+ssl: true
+ssl-key-file: keys/domain.key
+ssl-cert-file: keys/domain.crt
+ssl-disable-verify: false
+```
+
+Create 'keys' directory and generate SSL key and certificates files `domain.key` and `domain.crt`
+
+Run `bundle exec thin start` for running it with `thin`'s default port.
+
+Or use `sudo -E thin start -C config.yml -p 443` for running with default for `https://` port.
+
+Don't forget to enable processing of `X-Forwarded-...` headers on your application side. Just add following strings to your `resources/application.yml` file.
+```yml
+---
+server:
+  tomcat:
+    remote-ip-header: x-forwarded-for
+    protocol-header:  x-forwarded-proto
+  use-forward-headers:  true
+```
+
+Add some domain name like `debug.your_app.com` into your local `/etc/hosts` file like
+```
+127.0.0.1	debug.your_app.com
+```
+
+Next start the proxy and your app. And now you can access to your Spring application through SSL connection via `https://debug.your_app.com` URI in a browser.
+
 
 WARNING
 ----

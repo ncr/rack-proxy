@@ -5,12 +5,12 @@ module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.6.5"
+    VERSION = "0.6.6"
 
     class << self
       def extract_http_request_headers(env)
         headers = env.reject do |k, v|
-          !(/^HTTP_[A-Z0-9_]+$/ === k) || v.nil?
+          !(/^HTTP_[A-Z0-9_\.]+$/ === k) || v.nil?
         end.map do |k, v|
           [reconstruct_header_name(k), v]
         end.inject(Utils::HeaderHash.new) do |hash, k_v|
@@ -46,11 +46,16 @@ module Rack
       else
         @app = app
       end
+      
       @streaming = opts.fetch(:streaming, true)
       @ssl_verify_none = opts.fetch(:ssl_verify_none, false)
       @backend = URI(opts[:backend]) if opts[:backend]
       @read_timeout = opts.fetch(:read_timeout, 60)
       @ssl_version = opts[:ssl_version] if opts[:ssl_version]
+      
+      @username = opts[:username] if opts[:username]
+      @password = opts[:password] if opts[:password]
+
       @opts = opts
     end
 
@@ -92,6 +97,9 @@ module Rack
         target_request.content_type   = source_request.content_type if source_request.content_type
         target_request.body_stream.rewind
       end
+
+      # Use basic auth if we have to
+      target_request.basic_auth(@username, @password) if @username && @password
 
       backend = env.delete('rack.backend') || @backend || source_request
       use_ssl = backend.scheme == "https"
