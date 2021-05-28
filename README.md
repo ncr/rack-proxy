@@ -6,7 +6,7 @@ Installation
 Add the following to your `Gemfile`:
 
 ```
-gem 'rack-proxy', '~> 0.6.4'
+gem 'rack-proxy', '~> 0.6.6'
 ```
 
 Or install:
@@ -25,7 +25,7 @@ Below are some examples of real world use cases for Rack-Proxy, done something i
   * avoiding CORs complications by proxying from same domain to another backend
 * subdomain based pass-through to multiple apps
 * Complex redirect rules
-   * redirect pages with different extensions (ex: `.php`) to another app 
+   * redirect pages with different extensions (ex: `.php`) to another app
    * useful for handling awkward redirection rules for moved pages
 * fan Parallel Requests: turning a single API request to [multiple concurrent backend requests](https://github.com/typhoeus/typhoeus#making-parallel-requests) & merging results.
 * inserting or stripping headers required or problematic for certain clients
@@ -76,7 +76,7 @@ class ForwardHost < Rack::Proxy
 
     # example of inserting an additional header
     headers["X-Foo"] = "Bar"
-    
+
     # if you rewrite env, it appears that content-length isn't calculated correctly
     # resulting in only partial responses being sent to users
     # you can remove it or recalculate it here
@@ -98,14 +98,14 @@ class TrustingProxy < Rack::Proxy
   def rewrite_env(env)
     env["HTTP_HOST"] = "self-signed.badssl.com"
 
-    # We are going to trust the self-signed SSL 
+    # We are going to trust the self-signed SSL
     env["rack.ssl_verify_none"] = true
     env
   end
 
   def rewrite_response(triplet)
     status, headers, body = triplet
-    
+
     # if you rewrite env, it appears that content-length isn't calculated correctly
     # resulting in only partial responses being sent to users
     # you can remove it or recalculate it here
@@ -130,12 +130,12 @@ Test with `require 'rack_proxy_examples/example_service_proxy'`
 ```ruby
 ###
 # This is an example of how to use Rack-Proxy in a Rails application.
-#  
+#
 # Setup:
-# 1. rails new test_app 
+# 1. rails new test_app
 # 2. cd test_app
 # 3. install Rack-Proxy in `Gemfile`
-#    a. `gem 'rack-proxy', '~> 0.6.3'`
+#    a. `gem 'rack-proxy', '~> 0.6.6'`
 # 4. install gem: `bundle install`
 # 5. create `config/initializers/proxy.rb` adding this line `require 'rack_proxy_examples/example_service_proxy'`
 # 6. run: `SERVICE_URL=http://guides.rubyonrails.org rails server`
@@ -157,7 +157,7 @@ class ExampleServiceProxy < Rack::Proxy
 
         # This is the only path that needs to be set currently on Rails 5 & greater
         env['PATH_INFO'] = ENV['SERVICE_PATH'] || '/configuring.html'
-        
+
         # don't send your sites cookies to target service, unless it is a trusted internal service that can parse all your cookies
         env['HTTP_COOKIE'] = ''
         super(env)
@@ -185,14 +185,14 @@ class RackPhpProxy < Rack::Proxy
     if request.path =~ %r{\.php}
       env["HTTP_HOST"] = ENV["HTTP_HOST"] ? URI(ENV["HTTP_HOST"]).host : "localhost"
       ENV["PHP_PATH"] ||= '/manual/en/tutorial.firstpage.php'
-       
+
       # Rails 3 & 4
       env["REQUEST_PATH"] = ENV["PHP_PATH"] || "/php/#{request.fullpath}"
       # Rails 5 and above
       env['PATH_INFO'] = ENV["PHP_PATH"] || "/php/#{request.fullpath}"
 
       env['content-length'] = nil
-      
+
       super(env)
     else
       @app.call(env)
@@ -201,7 +201,7 @@ class RackPhpProxy < Rack::Proxy
 
   def rewrite_response(triplet)
     status, headers, body = triplet
-    
+
     # if you proxy depending on the backend, it appears that content-length isn't calculated correctly
     # resulting in only partial responses being sent to users
     # you can remove it or recalculate it here

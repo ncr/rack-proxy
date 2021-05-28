@@ -1,11 +1,11 @@
 ###
 # This is an example of how to use Rack-Proxy in a Rails application.
-#  
+#
 # Setup:
-# 1. rails new test_app 
+# 1. rails new test_app
 # 2. cd test_app
 # 3. install Rack-Proxy in `Gemfile`
-#    a. `gem 'rack-proxy', '~> 0.6.3'`
+#    a. `gem 'rack-proxy', '~> 0.6.6'`
 # 4. install gem: `bundle install`
 # 5. create `config/initializers/proxy.rb` adding this line `require 'rack_proxy_examples/example_service_proxy'`
 # 6. run: `SERVICE_URL=http://guides.rubyonrails.org rails server`
@@ -27,7 +27,7 @@ class ExampleServiceProxy < Rack::Proxy
 
         # This is the only path that needs to be set currently on Rails 5 & greater
         env['PATH_INFO'] = ENV['SERVICE_PATH'] || '/configuring.html'
-        
+
         # don't send your sites cookies to target service, unless it is a trusted internal service that can parse all your cookies
         env['HTTP_COOKIE'] = ''
         super(env)
