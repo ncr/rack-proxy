@@ -6,6 +6,7 @@ Gem::Specification.new do |s|
   s.name        = "rack-proxy"
   s.version     = Rack::Proxy::VERSION
   s.platform    = Gem::Platform::RUBY
+  s.license     = 'MIT'
   s.authors     = ["Jacek Becela"]
   s.email       = ["jacek.becela@gmail.com"]
   s.homepage    = "https://github.com/ncr/rack-proxy"
