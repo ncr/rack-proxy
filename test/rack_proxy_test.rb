@@ -120,7 +120,7 @@ class RackProxyTest < Test::Unit::TestCase
   end
 
   def test_response_header_included_Hop_by_hop
-    app({:streaming => true}).host = 'auth.goeasyship.com'
+    app({:streaming => true}).host = 'mockapi.io'
     get 'https://example.com/oauth2/token/info?access_token=123'
     assert !last_response.headers.key?('transfer-encoding')
   end

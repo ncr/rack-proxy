@@ -1,26 +1,28 @@
 require "test_helper"
 require "rack/http_streaming_response"
+require "pry"
 
 class HttpStreamingResponseTest < Test::Unit::TestCase
 
   def setup
-    host, req = "www.trix.pl", Net::HTTP::Get.new("/")
-    @response = Rack::HttpStreamingResponse.new(req, host)
+    host, req = "mockapi.io", Net::HTTP::Get.new("/")
+    @response = Rack::HttpStreamingResponse.new(req, host, 443)
+    @response.use_ssl = true
   end
 
   def test_streaming
     # Response status
-    assert @response.code == 200
-    assert @response.status == 200
+    assert_equal 200, @response.status
+    assert_equal 200, @response.status
 
     # Headers
     headers = @response.headers
 
-    assert headers.size > 0
+    assert headers.size.positive?
 
-    assert headers["content-type"] == ["text/html;charset=utf-8"]
-    assert headers["CoNtEnT-TyPe"] == headers["content-type"]
-    assert headers["content-length"].first.to_i > 0
+    assert_match %r{text/html; ?charset=utf-8}, headers["content-type"].first.downcase
+    assert_equal headers['content-type'], headers['CoNtEnT-TyPe']
+    assert headers['content-length'].first.to_i.positive?
 
     # Body
     chunks = []
@@ -28,7 +30,7 @@ class HttpStreamingResponseTest < Test::Unit::TestCase
       chunks << chunk
     end
 
-    assert chunks.size > 0
+    assert chunks.size.positive?
     chunks.each do |chunk|
       assert chunk.is_a?(String)
     end
