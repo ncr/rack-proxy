@@ -89,7 +89,7 @@ module Rack
         full_path = source_request.fullpath
       end
 
-      target_request = Net::HTTP.const_get(source_request.request_method.capitalize).new(full_path)
+      target_request = Net::HTTP.const_get(source_request.request_method.capitalize, false).new(full_path)
 
       # Setup headers
       target_request.initialize_http_header(self.class.extract_http_request_headers(source_request.env))
