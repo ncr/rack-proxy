@@ -20,8 +20,8 @@ class HttpStreamingResponseTest < Test::Unit::TestCase
     assert headers.size.positive?
 
     assert_match %r{text/html; ?charset=utf-8}, headers["content-type"].first.downcase
-    assert_equal headers['content-type'], headers['CoNtEnT-TyPe']
-    assert headers['content-length'].first.to_i.positive?
+    assert_equal headers["content-type"], headers["CoNtEnT-TyPe"]
+    assert headers["content-length"].first.to_i.positive?
 
     # Body
     chunks = []
