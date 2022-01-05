@@ -49,12 +49,12 @@ module Rack
 
       @streaming = opts.fetch(:streaming, true)
       @ssl_verify_none = opts.fetch(:ssl_verify_none, false)
-      @backend = URI(opts[:backend]) if opts[:backend]
+      @backend = opts[:backend] ? URI(opts[:backend]) : nil
       @read_timeout = opts.fetch(:read_timeout, 60)
-      @ssl_version = opts[:ssl_version] if opts[:ssl_version]
+      @ssl_version = opts[:ssl_version]
 
-      @username = opts[:username] if opts[:username]
-      @password = opts[:password] if opts[:password]
+      @username = opts[:username]
+      @password = opts[:password]
 
       @opts = opts
     end
