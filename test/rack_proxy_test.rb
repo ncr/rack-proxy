@@ -78,10 +78,10 @@ class RackProxyTest < Test::Unit::TestCase
     proxy_class = Rack::Proxy
 
     header = proxy_class.send(:reconstruct_header_name, "HTTP_ABC")
-    assert header == "ABC"
+    assert header == "Abc"
 
     header = proxy_class.send(:reconstruct_header_name, "HTTP_ABC_D")
-    assert header == "ABC-D"
+    assert header == "Abc-D"
   end
 
   def test_extract_http_request_headers

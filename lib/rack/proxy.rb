@@ -26,7 +26,7 @@ module Rack
 
       def normalize_headers(headers)
         mapped = headers.map do |k, v|
-          [k, if v.is_a? Array then v.join("\n") else v end]
+          [titleize(k), if v.is_a? Array then v.join("\n") else v end]
         end
         Utils::HeaderHash.new Hash[mapped]
       end
@@ -34,7 +34,11 @@ module Rack
       protected
 
       def reconstruct_header_name(name)
-        name.sub(/^HTTP_/, "").gsub("_", "-")
+        titleize(name.sub(/^HTTP_/, "").gsub("_", "-"))
+      end
+
+      def titleize(str)
+        str.split("-").map(&:capitalize).join("-")
       end
     end
 
