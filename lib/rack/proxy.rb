@@ -5,7 +5,7 @@ module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.7.0"
+    VERSION = "0.7.1"
 
     class << self
       def extract_http_request_headers(env)
