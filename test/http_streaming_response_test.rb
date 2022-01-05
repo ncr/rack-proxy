@@ -1,6 +1,5 @@
 require "test_helper"
 require "rack/http_streaming_response"
-require "pry"
 
 class HttpStreamingResponseTest < Test::Unit::TestCase
 

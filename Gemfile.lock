@@ -8,10 +8,10 @@ GEM
   remote: https://rubygems.org/
   specs:
     power_assert (0.2.6)
-    rack (2.0.3)
+    rack (2.2.3)
     rack-test (0.5.6)
       rack (>= 1.0)
-    rake (13.0.1)
+    rake (13.0.6)
     test-unit (3.1.5)
       power_assert
 
