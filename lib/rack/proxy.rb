@@ -7,6 +7,17 @@ module Rack
   class Proxy
     VERSION = "0.7.3"
 
+    HOP_BY_HOP_HEADERS = %w[
+      connection
+      keep-alive
+      proxy-authenticate
+      proxy-authorization
+      te
+      trailer
+      transfer-encoding
+      upgrade
+    ].freeze
+
     class << self
       def extract_http_request_headers(env)
         headers = env.reject do |k, v|
@@ -130,16 +141,16 @@ module Rack
         end
       end
 
+      code    = target_response.code
       headers = self.class.normalize_headers(target_response.respond_to?(:headers) ? target_response.headers : target_response.to_hash)
       body    = target_response.body || [""]
       body    = [body] unless body.respond_to?(:each)
 
       # According to https://tools.ietf.org/html/draft-ietf-httpbis-p1-messaging-14#section-7.1.3.1Acc
       # should remove hop-by-hop header fields
-      headers.reject! { |k| ['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade'].include? k.downcase }
-      [target_response.code, headers, body]
+      headers.reject! { |k| HOP_BY_HOP_HEADERS.include?(k.downcase) }
+
+      [code, headers, body]
     end
-
   end
-
 end
