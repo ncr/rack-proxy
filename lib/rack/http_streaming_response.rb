@@ -2,15 +2,15 @@ require "net_http_hacked"
 require "stringio"
 
 module Rack
-
   # Wraps the hacked net/http in a Rack way.
   class HttpStreamingResponse
-    STATUSES_WITH_NO_ENTITY_BODY = [204, 205, 304].freeze
+    STATUSES_WITH_NO_ENTITY_BODY = {
+      204 => true,
+      205 => true,
+      304 => true
+    }.freeze
 
-    attr_accessor :use_ssl
-    attr_accessor :verify_mode
-    attr_accessor :read_timeout
-    attr_accessor :ssl_version
+    attr_accessor :use_ssl, :verify_mode, :read_timeout, :ssl_version
 
     def initialize(request, host, port = nil)
       @request, @host, @port = request, host, port
@@ -22,7 +22,7 @@ module Rack
 
     def code
       response.code.to_i.tap do |response_code|
-        close_connection if STATUSES_WITH_NO_ENTITY_BODY.include?(response_code)
+        STATUSES_WITH_NO_ENTITY_BODY[response_code] && close_connection
       end
     end
     # #status is deprecated
@@ -40,10 +40,7 @@ module Rack
 
       response.read_body(&block)
     ensure
-      return if connection_closed
-
-      session.end_request_hacked
-      session.finish
+      close_connection
     end
 
     def to_s
@@ -75,9 +72,11 @@ module Rack
     attr_accessor :connection_closed
 
     def close_connection
-      self.connection_closed = true
+      return if connection_closed
+
       session.end_request_hacked
       session.finish
+      self.connection_closed = true
     end
   end
 end

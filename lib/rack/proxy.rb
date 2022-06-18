@@ -5,18 +5,18 @@ module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.7.3"
+    VERSION = "0.7.3".freeze
 
-    HOP_BY_HOP_HEADERS = %w[
-      connection
-      keep-alive
-      proxy-authenticate
-      proxy-authorization
-      te
-      trailer
-      transfer-encoding
-      upgrade
-    ].freeze
+    HOP_BY_HOP_HEADERS = {
+      'connection' => true,
+      'keep-alive' => true,
+      'proxy-authenticate' => true,
+      'proxy-authorization' => true,
+      'te' => true,
+      'trailer' => true,
+      'transfer-encoding' => true,
+      'upgrade' => true
+    }.freeze
 
     class << self
       def extract_http_request_headers(env)
@@ -30,9 +30,9 @@ module Rack
           hash
         end
 
-        x_forwarded_for = (headers["X-Forwarded-For"].to_s.split(/, +/) << env["REMOTE_ADDR"]).join(", ")
+        x_forwarded_for = (headers['X-Forwarded-For'].to_s.split(/, +/) << env['REMOTE_ADDR']).join(', ')
 
-        headers.merge!("X-Forwarded-For" =>  x_forwarded_for)
+        headers.merge!('X-Forwarded-For' => x_forwarded_for)
       end
 
       def normalize_headers(headers)
@@ -148,7 +148,7 @@ module Rack
 
       # According to https://tools.ietf.org/html/draft-ietf-httpbis-p1-messaging-14#section-7.1.3.1Acc
       # should remove hop-by-hop header fields
-      headers.reject! { |k| HOP_BY_HOP_HEADERS.include?(k.downcase) }
+      headers.reject! { |k| HOP_BY_HOP_HEADERS[k.downcase] }
 
       [code, headers, body]
     end
