@@ -24,7 +24,7 @@ module Rack
           !(/^HTTP_[A-Z0-9_\.]+$/ === k) || v.nil?
         end.map do |k, v|
           [reconstruct_header_name(k), v]
-        end.inject(Utils::HeaderHash.new) do |hash, k_v|
+        end.inject(Headers.new) do |hash, k_v|
           k, v = k_v
           hash[k] = v
           hash
@@ -39,7 +39,7 @@ module Rack
         mapped = headers.map do |k, v|
           [titleize(k), if v.is_a? Array then v.join("\n") else v end]
         end
-        Utils::HeaderHash.new Hash[mapped]
+        Headers.new Hash[mapped]
       end
 
       protected
