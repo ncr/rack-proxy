@@ -10,7 +10,7 @@ module Rack
       304 => true
     }.freeze
 
-    attr_accessor :use_ssl, :verify_mode, :read_timeout, :ssl_version
+    attr_accessor :use_ssl, :verify_mode, :read_timeout, :ssl_version, :cert, :key
 
     def initialize(request, host, port = nil)
       @request, @host, @port = request, host, port
@@ -60,7 +60,9 @@ module Rack
         http.use_ssl = use_ssl
         http.verify_mode = verify_mode
         http.read_timeout = read_timeout
-        http.ssl_version = ssl_version if use_ssl
+        http.ssl_version = ssl_version if ssl_version
+        http.cert = cert if cert
+        http.key = key if key
         http.start
       end
     end
