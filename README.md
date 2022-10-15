@@ -321,7 +321,7 @@ class TLSProxy < Rack::Proxy
   attr_accessor :original_request, :query_params
 
   def rewrite_env(env)
-    env["HTTP_HOST"] = "client-tls-auth-api:8443"
+    env["HTTP_HOST"] = "client-tls-auth-api.com:443"
     env
   end
 end
