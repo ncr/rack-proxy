@@ -311,13 +311,13 @@ key_raw = File.read('./certs/key.pem')
 cert = OpenSSL::X509::Certificate.new(cert_raw)
 key = OpenSSL::PKey.read(key_raw)
 
-use ForwardProxy, cert: cert, key: key, use_ssl: true, verify_mode: OpenSSL::SSL::VERIFY_PEER, ssl_version: 'TLSv1_2'
+use TLSProxy, cert: cert, key: key, use_ssl: true, verify_mode: OpenSSL::SSL::VERIFY_PEER, ssl_version: 'TLSv1_2'
 ```
 
 And rewrite host for example:
 ```ruby
-# forward_proxy.rb
-class ForwardProxy < Rack::Proxy
+# tls_proxy.rb
+class TLSProxy < Rack::Proxy
   attr_accessor :original_request, :query_params
 
   def rewrite_env(env)
