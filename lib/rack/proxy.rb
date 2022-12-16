@@ -24,11 +24,7 @@ module Rack
           !(/^HTTP_[A-Z0-9_\.]+$/ === k) || v.nil?
         end.map do |k, v|
           [reconstruct_header_name(k), v]
-        end.inject(Utils::HeaderHash.new) do |hash, k_v|
-          k, v = k_v
-          hash[k] = v
-          hash
-        end
+        end.then { |pairs| build_header_hash(pairs) }
 
         x_forwarded_for = (headers['X-Forwarded-For'].to_s.split(/, +/) << env['REMOTE_ADDR']).join(', ')
 
@@ -39,7 +35,17 @@ module Rack
         mapped = headers.map do |k, v|
           [titleize(k), if v.is_a? Array then v.join("\n") else v end]
         end
-        Utils::HeaderHash.new Hash[mapped]
+        build_header_hash Hash[mapped]
+      end
+
+      def build_header_hash(pairs)
+        if Rack.const_defined?(:Headers)
+          # Rack::Headers is only available from Rack 3 onward
+          Headers.new.tap { |headers| pairs.each { |k, v| headers[k] = v } }
+        else
+          # Rack::Utils::HeaderHash is deprecated from Rack 3 onward and is to be removed in 3.1
+          Utils::HeaderHash.new(pairs)
+        end
       end
 
       protected
