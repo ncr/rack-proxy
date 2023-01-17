@@ -4,7 +4,7 @@ require "rack/http_streaming_response"
 class HttpStreamingResponseTest < Test::Unit::TestCase
 
   def setup
-    host, req = "mockapi.io", Net::HTTP::Get.new("/")
+    host, req = "example.com", Net::HTTP::Get.new("/")
     @response = Rack::HttpStreamingResponse.new(req, host, 443)
     @response.use_ssl = true
   end
@@ -37,7 +37,7 @@ class HttpStreamingResponseTest < Test::Unit::TestCase
   end
 
   def test_to_s
-    assert_equal @response.headers["Content-Length"].first.to_i, @response.body.to_s.size
+    assert_equal @response.headers["Content-Length"].first.to_i, @response.body.to_s.bytesize
   end
 
   def test_to_s_called_twice
