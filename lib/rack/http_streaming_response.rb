@@ -29,9 +29,7 @@ module Rack
     alias_method :status, :code
 
     def headers
-      Utils::HeaderHash.new.tap do |h|
-        response.to_hash.each { |k, v| h[k] = v }
-      end
+      Rack::Proxy.build_header_hash(response.to_hash)
     end
 
     # Can be called only once!
