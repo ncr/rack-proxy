@@ -297,6 +297,35 @@ Add some domain name like `debug.your_app.com` into your local `/etc/hosts` file
 
 Next start the proxy and your app. And now you can access to your Spring application through SSL connection via `https://debug.your_app.com` URI in a browser.
 
+### Using SSL/TLS certificates with HTTP connection
+This may be helpful, when third-party API has authentication by client TLS certificates and you need to proxy your requests and sign them with certificate. 
+
+Just specify Rack::Proxy SSL options and your request will use TLS HTTP connection:
+```ruby
+# config.ru
+. . .
+
+cert_raw = File.read('./certs/rootCA.crt')
+key_raw = File.read('./certs/key.pem')
+
+cert = OpenSSL::X509::Certificate.new(cert_raw)
+key = OpenSSL::PKey.read(key_raw)
+
+use TLSProxy, cert: cert, key: key, use_ssl: true, verify_mode: OpenSSL::SSL::VERIFY_PEER, ssl_version: 'TLSv1_2'
+```
+
+And rewrite host for example:
+```ruby
+# tls_proxy.rb
+class TLSProxy < Rack::Proxy
+  attr_accessor :original_request, :query_params
+
+  def rewrite_env(env)
+    env["HTTP_HOST"] = "client-tls-auth-api.com:443"
+    env
+  end
+end
+```
 
 WARNING
 ----
