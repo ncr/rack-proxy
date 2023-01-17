@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    rack-proxy (0.7.5)
+    rack-proxy (0.7.6)
       rack
 
 GEM

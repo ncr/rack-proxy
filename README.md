@@ -6,7 +6,7 @@ Installation
 Add the following to your `Gemfile`:
 
 ```
-gem 'rack-proxy', '~> 0.7.5'
+gem 'rack-proxy', '~> 0.7.6'
 ```
 
 Or install:
@@ -136,7 +136,7 @@ Test with `require 'rack_proxy_examples/example_service_proxy'`
 # 1. rails new test_app
 # 2. cd test_app
 # 3. install Rack-Proxy in `Gemfile`
-#    a. `gem 'rack-proxy', '~> 0.7.5'`
+#    a. `gem 'rack-proxy', '~> 0.7.6'`
 # 4. install gem: `bundle install`
 # 5. create `config/initializers/proxy.rb` adding this line `require 'rack_proxy_examples/example_service_proxy'`
 # 6. run: `SERVICE_URL=http://guides.rubyonrails.org rails server`
@@ -298,7 +298,7 @@ Add some domain name like `debug.your_app.com` into your local `/etc/hosts` file
 Next start the proxy and your app. And now you can access to your Spring application through SSL connection via `https://debug.your_app.com` URI in a browser.
 
 ### Using SSL/TLS certificates with HTTP connection
-This may be helpful, when third-party API has authentication by client TLS certificates and you need to proxy your requests and sign them with certificate. 
+This may be helpful, when third-party API has authentication by client TLS certificates and you need to proxy your requests and sign them with certificate.
 
 Just specify Rack::Proxy SSL options and your request will use TLS HTTP connection:
 ```ruby
