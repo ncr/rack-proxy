@@ -12,6 +12,7 @@ Gem::Specification.new do |s|
   s.homepage    = "https://github.com/ncr/rack-proxy"
   s.summary     = %q{A request/response rewriting HTTP proxy. A Rack app.}
   s.description = %q{A Rack app that provides request/response rewriting proxy capabilities with streaming.}
+  s.required_ruby_version = '>= 2.6'
 
   s.files         = `git ls-files`.split("\n")
   s.test_files    = `git ls-files -- {test,spec,features}/*`.split("\n")
