@@ -69,13 +69,16 @@ module Rack
       end
 
       @streaming = opts.fetch(:streaming, true)
-      @ssl_verify_none = opts.fetch(:ssl_verify_none, false)
       @backend = opts[:backend] ? URI(opts[:backend]) : nil
       @read_timeout = opts.fetch(:read_timeout, 60)
       @ssl_version = opts[:ssl_version]
       @cert = opts[:cert]
       @key = opts[:key]
+      # SSL verification: defaults to VERIFY_PEER (Ruby's Net::HTTP default).
+      # Pass ssl_verify_none: true to explicitly disable cert verification, or
+      # pass verify_mode: <OpenSSL::SSL::VERIFY_*> for full control.
       @verify_mode = opts[:verify_mode]
+      @verify_mode ||= OpenSSL::SSL::VERIFY_NONE if opts[:ssl_verify_none]
 
       @username = opts[:username]
       @password = opts[:password]
@@ -137,7 +140,7 @@ module Rack
           target_response.use_ssl = use_ssl
           target_response.read_timeout = read_timeout
           target_response.ssl_version = @ssl_version if @ssl_version
-          target_response.verify_mode = (@verify_mode || OpenSSL::SSL::VERIFY_NONE) if use_ssl
+          target_response.verify_mode = (@verify_mode || OpenSSL::SSL::VERIFY_PEER) if use_ssl
           target_response.cert = @cert if @cert
           target_response.key = @key if @key
         else
@@ -145,7 +148,7 @@ module Rack
           http.use_ssl = use_ssl if use_ssl
           http.read_timeout = read_timeout
           http.ssl_version = @ssl_version if @ssl_version
-          http.verify_mode = (@verify_mode || OpenSSL::SSL::VERIFY_NONE if use_ssl) if use_ssl
+          http.verify_mode = @verify_mode || OpenSSL::SSL::VERIFY_PEER if use_ssl
           http.cert = @cert if @cert
           http.key = @key if @key
 

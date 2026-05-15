@@ -185,7 +185,60 @@ class RackProxyTest < Test::Unit::TestCase
     end
   end
 
+  # Issue #65: header values must be strings, not single-element arrays,
+  # for both streaming and non-streaming paths.
+  def test_header_values_are_strings_streaming
+    assert_no_array_header_values(streaming: true)
+  end
+
+  def test_header_values_are_strings_non_streaming
+    assert_no_array_header_values(streaming: false)
+  end
+
+  # Issue #113: SSL cert verification must default to VERIFY_PEER (Ruby's
+  # Net::HTTP default), not VERIFY_NONE.
+  def test_ssl_default_is_verify_peer
+    proxy = Rack::Proxy.new
+    assert_nil proxy.instance_variable_get(:@verify_mode),
+      "@verify_mode should be unset by default so VERIFY_PEER applies at request time"
+  end
+
+  def test_ssl_verify_none_opt_in
+    proxy = Rack::Proxy.new(ssl_verify_none: true)
+    assert_equal OpenSSL::SSL::VERIFY_NONE, proxy.instance_variable_get(:@verify_mode)
+  end
+
+  def test_explicit_verify_mode_wins_over_ssl_verify_none
+    proxy = Rack::Proxy.new(ssl_verify_none: true, verify_mode: OpenSSL::SSL::VERIFY_PEER)
+    assert_equal OpenSSL::SSL::VERIFY_PEER, proxy.instance_variable_get(:@verify_mode)
+  end
+
+  def test_https_default_rejects_invalid_certificate
+    # self-signed cert on a public test host should be rejected with the new default
+    app({:streaming => false}).host = 'self-signed.badssl.com'
+    error = assert_raise(OpenSSL::SSL::SSLError) { get 'https://example.com/' }
+    assert_match(/certificate verify failed/, error.message)
+  end
+
+  def test_https_with_ssl_verify_none_accepts_invalid_certificate
+    app({:streaming => false, :ssl_verify_none => true}).host = 'self-signed.badssl.com'
+    get 'https://example.com/'
+    assert last_response.ok?
+  end
+
   private
+
+  def assert_no_array_header_values(streaming:)
+    with_webrick_proxy(streaming: streaming) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get '/echo-headers'
+      array_valued = last_response.headers.select { |_, v| v.is_a?(Array) }
+      assert_empty array_valued,
+        "expected no Array-valued headers (#65), got: #{array_valued.inspect}"
+      assert_equal 'value-here', last_response['x-custom']
+    end
+  end
+
 
   # Spin up a tiny WEBrick server with fixed routes so we can exercise the
   # proxy against real Net::HTTP requests without depending on a remote host.
@@ -200,6 +253,10 @@ class RackProxyTest < Test::Unit::TestCase
     server.mount_proc('/no-content')   { |_req, res| res.status = 204 }
     server.mount_proc('/not-modified') { |_req, res| res.status = 304 }
     server.mount_proc('/empty')        { |_req, res| res.body = '' }
+    server.mount_proc('/echo-headers') do |_req, res|
+      res['x-custom'] = 'value-here'
+      res.body = 'ok'
+    end
     Thread.new { server.start }
     port = server.config[:Port]
 
