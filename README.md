@@ -43,6 +43,7 @@ Options can be set when initializing the middleware or overriding a method.
 * `:ssl_version` - tell `Net::HTTP` to set a specific `ssl_version`
 * `:backend` - the URI parseable format of host and port of the target proxy backend. If not set it will assume the backend target is the same as the source.
 * `:read_timeout` - set proxy timeout it defaults to 60 seconds
+* `:logger` - any object responding to `#<<` (e.g. `$stdout`, a `StringIO`, or a Ruby `Logger`). Wired through to `Net::HTTP#set_debug_output` so the full HTTP wire-level conversation is written to the sink. Useful for debugging.
 
 To pass in options, when you configure your middleware you can pass them in as an optional hash.
 
