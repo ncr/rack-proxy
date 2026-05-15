@@ -14,6 +14,7 @@ GEM
     rake (13.0.6)
     test-unit (3.6.1)
       power_assert
+    webrick (1.9.2)
 
 PLATFORMS
   arm64-darwin-22
@@ -24,6 +25,7 @@ DEPENDENCIES
   rack-test
   rake
   test-unit
+  webrick
 
 BUNDLED WITH
    2.4.17

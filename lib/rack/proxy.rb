@@ -130,33 +130,40 @@ module Rack
       read_timeout = env.delete('http.read_timeout') || @read_timeout
 
       # Create the response
-      if @streaming
-        # streaming response (the actual network communication is deferred, a.k.a. streamed)
-        target_response = HttpStreamingResponse.new(target_request, backend.host, backend.port)
-        target_response.use_ssl = use_ssl
-        target_response.read_timeout = read_timeout
-        target_response.ssl_version = @ssl_version if @ssl_version
-        target_response.verify_mode = (@verify_mode || OpenSSL::SSL::VERIFY_NONE) if use_ssl
-        target_response.cert = @cert if @cert
-        target_response.key = @key if @key
-      else
-        http = Net::HTTP.new(backend.host, backend.port)
-        http.use_ssl = use_ssl if use_ssl
-        http.read_timeout = read_timeout
-        http.ssl_version = @ssl_version if @ssl_version
-        http.verify_mode = (@verify_mode || OpenSSL::SSL::VERIFY_NONE if use_ssl) if use_ssl
-        http.cert = @cert if @cert
-        http.key = @key if @key
+      begin
+        if @streaming
+          # streaming response (the actual network communication is deferred, a.k.a. streamed)
+          target_response = HttpStreamingResponse.new(target_request, backend.host, backend.port)
+          target_response.use_ssl = use_ssl
+          target_response.read_timeout = read_timeout
+          target_response.ssl_version = @ssl_version if @ssl_version
+          target_response.verify_mode = (@verify_mode || OpenSSL::SSL::VERIFY_NONE) if use_ssl
+          target_response.cert = @cert if @cert
+          target_response.key = @key if @key
+        else
+          http = Net::HTTP.new(backend.host, backend.port)
+          http.use_ssl = use_ssl if use_ssl
+          http.read_timeout = read_timeout
+          http.ssl_version = @ssl_version if @ssl_version
+          http.verify_mode = (@verify_mode || OpenSSL::SSL::VERIFY_NONE if use_ssl) if use_ssl
+          http.cert = @cert if @cert
+          http.key = @key if @key
 
-        target_response = http.start do
-          http.request(target_request)
+          target_response = http.start do
+            http.request(target_request)
+          end
         end
+
+        code    = target_response.code
+        headers = self.class.normalize_headers(target_response.respond_to?(:headers) ? target_response.headers : target_response.to_hash)
+        body    = target_response.body || []
+        body    = [body] unless body.respond_to?(:each)
+      rescue Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::ENETUNREACH, Errno::ETIMEDOUT, Net::OpenTimeout, SocketError
+        return [502, {}, []]
       end
 
-      code    = target_response.code
-      headers = self.class.normalize_headers(target_response.respond_to?(:headers) ? target_response.headers : target_response.to_hash)
-      body    = target_response.body || [""]
-      body    = [body] unless body.respond_to?(:each)
+      # No entity body for status codes that don't allow one (1xx, 204, 304)
+      body = [] if Rack::Utils::STATUS_WITH_NO_ENTITY_BODY[code.to_i]
 
       # According to https://tools.ietf.org/html/draft-ietf-httpbis-p1-messaging-14#section-7.1.3.1Acc
       # should remove hop-by-hop header fields
