@@ -226,6 +226,41 @@ class RackProxyTest < Test::Unit::TestCase
     assert last_response.ok?
   end
 
+  # Issue #80: a :logger option should pipe Net::HTTP debug output to the
+  # given sink (anything responding to #<<). We use a StringIO to capture it.
+  def test_logger_captures_request_in_non_streaming
+    sink = StringIO.new
+    with_webrick_proxy(streaming: false, logger: sink) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get '/empty'
+      assert last_response.ok?
+    end
+    assert_match(/GET \/empty/, sink.string,
+      "expected debug output to include request line, got: #{sink.string.inspect}")
+  end
+
+  def test_logger_captures_request_in_streaming
+    sink = StringIO.new
+    with_webrick_proxy(streaming: true, logger: sink) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get '/empty'
+      assert last_response.ok?
+    end
+    assert_match(/GET \/empty/, sink.string,
+      "expected debug output to include request line, got: #{sink.string.inspect}")
+  end
+
+  def test_no_logger_means_no_debug_output
+    # Without a :logger option, Net::HTTP's set_debug_output should never be
+    # called. We can't directly assert that, but we can confirm requests still
+    # work when no logger is configured (covered by every other test).
+    with_webrick_proxy(streaming: false) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get '/empty'
+      assert last_response.ok?
+    end
+  end
+
   private
 
   def assert_no_array_header_values(streaming:)
@@ -242,7 +277,7 @@ class RackProxyTest < Test::Unit::TestCase
 
   # Spin up a tiny WEBrick server with fixed routes so we can exercise the
   # proxy against real Net::HTTP requests without depending on a remote host.
-  def with_webrick_proxy(streaming:)
+  def with_webrick_proxy(**proxy_opts)
     require 'webrick'
     server = WEBrick::HTTPServer.new(
       Port: 0,
@@ -260,7 +295,7 @@ class RackProxyTest < Test::Unit::TestCase
     Thread.new { server.start }
     port = server.config[:Port]
 
-    proxy = HostProxy.new(streaming: streaming)
+    proxy = HostProxy.new(**proxy_opts)
     @app = proxy
     yield port, proxy
   ensure

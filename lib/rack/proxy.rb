@@ -83,6 +83,10 @@ module Rack
       @username = opts[:username]
       @password = opts[:password]
 
+      # Optional logger for Net::HTTP debug output. Accepts anything with a #<< method
+      # (e.g. $stdout, a StringIO, or a Ruby Logger instance).
+      @logger = opts[:logger]
+
       @opts = opts
     end
 
@@ -143,6 +147,7 @@ module Rack
           target_response.verify_mode = (@verify_mode || OpenSSL::SSL::VERIFY_PEER) if use_ssl
           target_response.cert = @cert if @cert
           target_response.key = @key if @key
+          target_response.logger = @logger if @logger
         else
           http = Net::HTTP.new(backend.host, backend.port)
           http.use_ssl = use_ssl if use_ssl
@@ -151,6 +156,7 @@ module Rack
           http.verify_mode = @verify_mode || OpenSSL::SSL::VERIFY_PEER if use_ssl
           http.cert = @cert if @cert
           http.key = @key if @key
+          http.set_debug_output(@logger) if @logger
 
           target_response = http.start do
             http.request(target_request)
