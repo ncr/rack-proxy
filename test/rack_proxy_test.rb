@@ -250,6 +250,22 @@ class RackProxyTest < Test::Unit::TestCase
       "expected debug output to include request line, got: #{sink.string.inspect}")
   end
 
+  # Regression: build_header_hash must not match a top-level ::Headers
+  # constant defined by the host app (would happen with inherit: true).
+  def test_build_header_hash_ignores_toplevel_headers_constant
+    Object.send(:remove_const, :Headers) if Object.const_defined?(:Headers, false)
+    Object.const_set(:Headers, Class.new)
+    begin
+      result = Rack::Proxy.send(:build_header_hash, [['X-Test', 'value']])
+      # On Rack 3+ we get Rack::Headers; on Rack 2 we get Rack::Utils::HeaderHash.
+      # In neither case should we get the bogus top-level ::Headers.
+      assert_not_equal ::Headers, result.class,
+        "build_header_hash leaked into top-level ::Headers"
+    ensure
+      Object.send(:remove_const, :Headers)
+    end
+  end
+
   def test_no_logger_means_no_debug_output
     # Without a :logger option, Net::HTTP's set_debug_output should never be
     # called. We can't directly assert that, but we can confirm requests still

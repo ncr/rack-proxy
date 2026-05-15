@@ -5,7 +5,7 @@ module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.8.1".freeze
+    VERSION = "0.8.2".freeze
 
     HOP_BY_HOP_HEADERS = {
       'connection' => true,
@@ -39,7 +39,9 @@ module Rack
       end
 
       def build_header_hash(pairs)
-        if Rack.const_defined?(:Headers)
+        # Pass inherit: false so we only check Rack's own constants — otherwise
+        # a top-level ::Headers defined by the host app would falsely match.
+        if Rack.const_defined?(:Headers, false)
           # Rack::Headers is only available from Rack 3 onward
           Headers.new.tap { |headers| pairs.each { |k, v| headers[k] = v } }
         else
