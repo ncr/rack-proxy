@@ -6,7 +6,7 @@ Installation
 Add the following to your `Gemfile`:
 
 ```
-gem 'rack-proxy', '~> 0.7.7'
+gem 'rack-proxy', '~> 0.8.0'
 ```
 
 Or install:
@@ -38,7 +38,8 @@ Options can be set when initializing the middleware or overriding a method.
 
 
 * `:streaming` - defaults to `true`, but does not work on all Ruby versions, recommend to set to `false`
-* `:ssl_verify_none` - tell `Net::HTTP` to not validate certs
+* `:ssl_verify_none` - tell `Net::HTTP` to skip TLS certificate verification (defaults to verifying — see [Upgrading](#upgrading) for the 0.8 change)
+* `:verify_mode` - explicit `OpenSSL::SSL::VERIFY_*` constant; wins over `ssl_verify_none`
 * `:ssl_version` - tell `Net::HTTP` to set a specific `ssl_version`
 * `:backend` - the URI parseable format of host and port of the target proxy backend. If not set it will assume the backend target is the same as the source.
 * `:read_timeout` - set proxy timeout it defaults to 60 seconds
@@ -98,9 +99,6 @@ class TrustingProxy < Rack::Proxy
 
   def rewrite_env(env)
     env["HTTP_HOST"] = "self-signed.badssl.com"
-
-    # We are going to trust the self-signed SSL
-    env["rack.ssl_verify_none"] = true
     env
   end
 
@@ -116,11 +114,8 @@ class TrustingProxy < Rack::Proxy
   end
 
 end
-```
 
-The same can be achieved for *all* requests going through the `Rack::Proxy` instance by using
-
-```ruby
+# Pass ssl_verify_none: true to skip TLS certificate verification.
 Rack::Proxy.new(ssl_verify_none: true)
 ```
 
@@ -326,6 +321,29 @@ class TLSProxy < Rack::Proxy
   end
 end
 ```
+
+Upgrading
+----
+
+### 0.7.x → 0.8.0
+
+**TLS certificate verification is now on by default.** Prior versions silently used `OpenSSL::SSL::VERIFY_NONE` whenever the backend was HTTPS, which disabled certificate checks. 0.8.0 defaults to `VERIFY_PEER` to match Ruby's `Net::HTTP`.
+
+If you proxy to a backend with a self-signed or otherwise untrusted certificate, you'll now get an `OpenSSL::SSL::SSLError` unless you opt out explicitly:
+
+```ruby
+Rack::Proxy.new(ssl_verify_none: true)              # or
+Rack::Proxy.new(verify_mode: OpenSSL::SSL::VERIFY_NONE)
+```
+
+For internal services with a private CA, prefer setting `cert`/`verify_mode` over disabling verification altogether.
+
+A note on header keys (#96)
+----
+
+Per the standard Rack/CGI convention, header names received by your proxy are exposed in the env with underscores (`HTTP_X_CUSTOM_HEADER`), and rack-proxy rewrites them with dashes (`X-Custom-Header`) when forwarding. This conversion is lossy: by the time a request reaches rack-proxy, the upstream web server (nginx, Apache, Caddy, Puma) has already collapsed both `X-Custom-Header` and `X_Custom_Header` into the same env key, and rack-proxy cannot recover the original spelling.
+
+If you need underscore-style headers preserved end-to-end, configure your fronting web server (e.g. `underscores_in_headers on;` in nginx, or `HTTPProtocolOptions` in Apache) — rack-proxy is not the right layer to fix this.
 
 WARNING
 ----
