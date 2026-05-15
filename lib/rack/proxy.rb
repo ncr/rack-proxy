@@ -5,7 +5,7 @@ module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.8.0".freeze
+    VERSION = "0.8.1".freeze
 
     HOP_BY_HOP_HEADERS = {
       'connection' => true,
