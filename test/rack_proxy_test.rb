@@ -125,4 +125,89 @@ class RackProxyTest < Test::Unit::TestCase
     get 'https://example.com/oauth2/token/info?access_token=123'
     assert !last_response.headers.key?('transfer-encoding')
   end
+
+  # Issue #58: connection errors should return 502, not raise.
+  def test_connection_refused_returns_502
+    # Bind a socket to find a free port, then close it so connection is refused.
+    server = TCPServer.new('127.0.0.1', 0)
+    closed_port = server.addr[1]
+    server.close
+
+    app({:streaming => false}).host = "127.0.0.1:#{closed_port}"
+    get '/'
+    assert_equal 502, last_response.status
+    assert_equal '', last_response.body
+  end
+
+  def test_connection_refused_returns_502_streaming
+    server = TCPServer.new('127.0.0.1', 0)
+    closed_port = server.addr[1]
+    server.close
+
+    app({:streaming => true}).host = "127.0.0.1:#{closed_port}"
+    get '/'
+    assert_equal 502, last_response.status
+    assert_equal '', last_response.body
+  end
+
+  def test_unknown_host_returns_502
+    app({:streaming => false}).host = 'no-such-host.invalid'
+    get '/'
+    assert_equal 502, last_response.status
+  end
+
+  # Issues #122/#123: body should be [] for empty responses and for status
+  # codes that don't allow an entity body (1xx, 204, 304).
+  def test_no_entity_body_for_204
+    with_webrick_proxy(streaming: false) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get '/no-content'
+      assert_equal 204, last_response.status
+      assert_equal '', last_response.body
+    end
+  end
+
+  def test_no_entity_body_for_304
+    with_webrick_proxy(streaming: false) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get '/not-modified'
+      assert_equal 304, last_response.status
+      assert_equal '', last_response.body
+    end
+  end
+
+  def test_empty_body_is_not_array_with_empty_string
+    with_webrick_proxy(streaming: false) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get '/empty'
+      assert_equal 200, last_response.status
+      assert_equal '', last_response.body
+    end
+  end
+
+  private
+
+  # Spin up a tiny WEBrick server with fixed routes so we can exercise the
+  # proxy against real Net::HTTP requests without depending on a remote host.
+  def with_webrick_proxy(streaming:)
+    require 'webrick'
+    server = WEBrick::HTTPServer.new(
+      Port: 0,
+      BindAddress: '127.0.0.1',
+      Logger: WEBrick::Log.new(File::NULL),
+      AccessLog: []
+    )
+    server.mount_proc('/no-content')   { |_req, res| res.status = 204 }
+    server.mount_proc('/not-modified') { |_req, res| res.status = 304 }
+    server.mount_proc('/empty')        { |_req, res| res.body = '' }
+    Thread.new { server.start }
+    port = server.config[:Port]
+
+    proxy = HostProxy.new(streaming: streaming)
+    @app = proxy
+    yield port, proxy
+  ensure
+    server&.shutdown
+    @app = nil
+  end
 end
