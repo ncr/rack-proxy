@@ -31,9 +31,9 @@ class RackProxyTest < Test::Unit::TestCase
 
   def test_http_full_request_headers
     app(:streaming => false)
-    app.host = 'www.google.com'
-    get "/"
-    assert !Array(last_response['Set-Cookie']).empty?, 'Google always sets a cookie, yo. Where my cookies at?!'
+    app.host = 'httpbin.org'
+    get "/cookies/set?test=1"
+    assert !Array(last_response['Set-Cookie']).empty?, 'httpbin.org/cookies/set should set a cookie'
   end
 
   def test_https_streaming
@@ -44,7 +44,7 @@ class RackProxyTest < Test::Unit::TestCase
   end
 
   def test_https_streaming_tls
-    app(:ssl_version => :TLSv1).host = 'www.apple.com'
+    app(:ssl_version => :TLSv1_2).host = 'www.apple.com'
     get 'https://example.com'
     assert last_response.ok?
     assert_match(/(itunes|iphone|ipod|mac|ipad)/, last_response.body)
@@ -58,7 +58,7 @@ class RackProxyTest < Test::Unit::TestCase
   end
 
   def test_https_full_request_tls
-    app({:streaming => false, :ssl_version => :TLSv1}).host = 'www.apple.com'
+    app({:streaming => false, :ssl_version => :TLSv1_2}).host = 'www.apple.com'
     get 'https://example.com'
     assert last_response.ok?
     assert_match(/(itunes|iphone|ipod|mac|ipad)/, last_response.body)
@@ -69,7 +69,8 @@ class RackProxyTest < Test::Unit::TestCase
     headers = { 'header_array' => ['first_entry'], 'header_non_array' => :entry }
 
     normalized_headers = proxy_class.send(:normalize_headers, headers)
-    assert normalized_headers.instance_of?(Rack::Utils::HeaderHash)
+    expected_class = Rack.const_defined?(:Headers) ? Rack::Headers : Rack::Utils::HeaderHash
+    assert normalized_headers.instance_of?(expected_class)
     assert normalized_headers['header_array'] == 'first_entry'
     assert normalized_headers['header_non_array'] == :entry
   end

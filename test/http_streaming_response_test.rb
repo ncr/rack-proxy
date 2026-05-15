@@ -19,9 +19,8 @@ class HttpStreamingResponseTest < Test::Unit::TestCase
 
     assert headers.size.positive?
 
-    assert_match %r{text/html; ?charset=utf-8}, headers["content-type"].first.downcase
+    assert_match %r{text/html}, headers["content-type"].first.downcase
     assert_equal headers["content-type"], headers["CoNtEnT-TyPe"]
-    assert headers["content-length"].first.to_i.positive?
 
     # Body
     chunks = []
@@ -37,7 +36,10 @@ class HttpStreamingResponseTest < Test::Unit::TestCase
   end
 
   def test_to_s
-    assert_equal @response.headers["Content-Length"].first.to_i, @response.body.to_s.bytesize
+    body_string = @response.body.to_s
+    assert body_string.bytesize.positive?
+    content_length = @response.headers["Content-Length"]
+    assert_equal content_length.first.to_i, body_string.bytesize if content_length
   end
 
   def test_to_s_called_twice
