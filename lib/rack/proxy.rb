@@ -128,7 +128,7 @@ module Rack
         target_request.body_stream    = source_request.body
         target_request.content_length = source_request.content_length.to_i
         target_request.content_type   = source_request.content_type if source_request.content_type
-        target_request.body_stream.rewind
+        target_request.body_stream.rewind if target_request.body_stream.respond_to?(:rewind)
       end
 
       # Use basic auth if we have to
