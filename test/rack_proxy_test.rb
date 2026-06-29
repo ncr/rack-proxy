@@ -120,6 +120,42 @@ class RackProxyTest < Test::Unit::TestCase
     end
   end
 
+  # An input stream that deliberately omits #rewind, mimicking
+  # Rackup::Handler::WEBrick::Input under Rack 3 (the Rack 3 SPEC no longer
+  # requires the input stream to respond to #rewind, only gets/each/read).
+  class NonRewindableInput
+    def initialize(string)
+      @io = StringIO.new(string)
+    end
+
+    def read(*args) = @io.read(*args)
+    def gets(*args) = @io.gets(*args)
+    def each(&block) = @io.each(&block)
+    # intentionally NO #rewind
+  end
+
+  # Issue #128: a non-rewindable body stream must not raise (it used to blow up
+  # with NoMethodError on #rewind, surfacing confusingly as a 500). The body
+  # must still be forwarded intact, since it is never read before Net::HTTP sends it.
+  def test_non_rewindable_body_is_forwarded_without_raising
+    with_webrick_proxy(streaming: false) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+
+      body = NonRewindableInput.new("hello=world")
+      assert !body.respond_to?(:rewind), "fixture must not be rewindable to exercise the guard"
+
+      env = Rack::MockRequest.env_for("/echo-body", method: "POST")
+      env["rack.input"]     = body
+      env["CONTENT_LENGTH"] = "hello=world".bytesize.to_s
+      env["CONTENT_TYPE"]   = "text/plain"
+
+      status, _headers, response = nil
+      assert_nothing_raised { status, _headers, response = proxy.call(env) }
+      assert_equal 200, status.to_i
+      assert_equal "hello=world", response.to_a.join, "body must be forwarded intact"
+    end
+  end
+
   def test_response_header_included_Hop_by_hop
     app({:streaming => true}).host = 'mockapi.io'
     get 'https://example.com/oauth2/token/info?access_token=123'
@@ -308,6 +344,7 @@ class RackProxyTest < Test::Unit::TestCase
       res['x-custom'] = 'value-here'
       res.body = 'ok'
     end
+    server.mount_proc('/echo-body')    { |req, res| res.body = req.body.to_s }
     Thread.new { server.start }
     port = server.config[:Port]
 
