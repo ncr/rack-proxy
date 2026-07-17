@@ -1,5 +1,10 @@
 # rack-proxy — 2026 Modernization + Hardening Roadmap
 
+> **Progress:** Batch 1 (green loop) — DONE on branch `modernization/batch-1-green-loop`.
+> Batch 2 (all six P0 security fixes + P1-4 config dedup) — DONE on branch
+> `modernization/batch-2-security`, each with a regression test on the offline harness.
+> Remaining: Batch 3 (modernization & hardening) and Batch 4 (docs, supply-chain, polish).
+
 Baseline already in place (do **not** redo): VERIFY_PEER default (proxy.rb:149/158), 502-on-connect-error mapping (proxy.rb:172), Rack 3 `Headers`/Rack 2 `HeaderHash` branch (proxy.rb:44-50), non-rewindable body guard (proxy.rb:131), `:logger` option. Everything below builds on that.
 
 Effort key: **S** ≤ ½ day · **M** ~1-2 days · **L** ~several days. `[agent-DX]` = directly serves the goal of a repo that is easy + safe for AI agents to work in.
