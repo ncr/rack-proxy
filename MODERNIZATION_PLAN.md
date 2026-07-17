@@ -1,9 +1,16 @@
 # rack-proxy — 2026 Modernization + Hardening Roadmap
 
-> **Progress:** Batch 1 (green loop) — DONE on branch `modernization/batch-1-green-loop`.
-> Batch 2 (all six P0 security fixes + P1-4 config dedup) — DONE on branch
-> `modernization/batch-2-security`, each with a regression test on the offline harness.
-> Remaining: Batch 3 (modernization & hardening) and Batch 4 (docs, supply-chain, polish).
+> **Progress:**
+> - Batch 1 (green loop) — DONE, branch `modernization/batch-1-green-loop`.
+> - Batch 2 (six P0 security fixes + P1-4 config dedup) — DONE, branch `modernization/batch-2-security`.
+> - Batch 3 additive hardening — DONE, branch `modernization/batch-3-tls-timeouts`:
+>   `:ca_file`/`:cert_store` (P1-6, incl. hermetic VERIFY_PEER-success test),
+>   `:open_timeout`/`:write_timeout` (P2-2), `:min_version`/`:max_version` (P2-8),
+>   rack pin + `require "rack"` (P1-7), `:max_response_length` (P2-3), example load
+>   safety (P2-5 partial — physical move + README deferred to Batch 4), and a
+>   load-time guard on the monkey-patch (P1-5 interim).
+> - **Still open:** P1-5 the Fiber-based rewrite that retires `net_http_hacked.rb`
+>   (high-risk, deserves a dedicated pass); Batch 4 (docs, supply-chain, README, polish).
 
 Baseline already in place (do **not** redo): VERIFY_PEER default (proxy.rb:149/158), 502-on-connect-error mapping (proxy.rb:172), Rack 3 `Headers`/Rack 2 `HeaderHash` branch (proxy.rb:44-50), non-rewindable body guard (proxy.rb:131), `:logger` option. Everything below builds on that.
 
