@@ -21,4 +21,7 @@ class ForwardHost < Rack::Proxy
 
 end
 
-Rails.application.config.middleware.use ForwardHost, backend: 'http://example.com', streaming: false
+# Only wire into the middleware stack when running inside a booted Rails app.
+if defined?(Rails) && Rails.respond_to?(:application) && Rails.application
+  Rails.application.config.middleware.use ForwardHost, backend: 'http://example.com', streaming: false
+end

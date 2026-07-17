@@ -505,6 +505,43 @@ class RackProxyTest < Test::Unit::TestCase
     @app = nil
   end
 
+  # P2-3: :max_response_length caps the backend response size.
+  def test_max_response_length_rejects_declared_oversize_non_streaming
+    with_webrick_proxy(streaming: false, max_response_length: 10) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get "/" # body is well over 10 bytes, with a Content-Length
+      assert_equal 502, last_response.status
+    end
+  end
+
+  def test_max_response_length_rejects_declared_oversize_streaming
+    with_webrick_proxy(streaming: true, max_response_length: 10) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get "/"
+      assert_equal 502, last_response.status
+    end
+  end
+
+  # No Content-Length (chunked): the cap must still fire incrementally while
+  # streaming, aborting the transfer with ResponseTooLarge.
+  def test_max_response_length_enforced_while_streaming_chunked
+    with_webrick_proxy(streaming: true, max_response_length: 5) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      status, _headers, body = proxy.call(Rack::MockRequest.env_for("/chunked"))
+      assert_equal 200, status.to_i, "headers precede the body, so status is still 200"
+      assert_raise(Rack::HttpStreamingResponse::ResponseTooLarge) { body.each { |_chunk| } }
+    end
+  end
+
+  def test_max_response_length_allows_within_limit
+    with_webrick_proxy(streaming: false, max_response_length: 100_000) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get "/"
+      assert last_response.ok?
+      assert_match(/Example Domain/, last_response.body)
+    end
+  end
+
   private
 
   def assert_gzip_forwarded_verbatim(streaming:)

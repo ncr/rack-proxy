@@ -102,6 +102,10 @@ module Rack
       # stall a thread for Net::HTTP's 60s defaults even with a small read_timeout.
       @open_timeout = opts[:open_timeout]
       @write_timeout = opts[:write_timeout]
+      # Optional cap (in bytes) on the backend response size, to bound memory
+      # against a hostile/huge backend. Enforced incrementally while streaming and
+      # via the declared Content-Length / buffered size otherwise. Default: no cap.
+      @max_response_length = opts[:max_response_length]
       # :ssl_version pins an exact protocol and is deprecated (it forbids TLS 1.3);
       # prefer :min_version / :max_version, which map to Net::HTTP#min_version=/#max_version=.
       @ssl_version = opts[:ssl_version]
@@ -236,10 +240,37 @@ module Rack
       # consistent on Rack 2 for any downstream middleware.
       headers.keys.each { |k| headers.delete(k) if HOP_BY_HOP_HEADERS[k.downcase] }
 
+      return [502, {}, []] if response_too_large?(target_response, headers, body)
+
       [code, headers, body]
     end
 
     private
+
+    # Enforce :max_response_length. Returns true (→ 502) when the response is
+    # already known to be too large. For streaming, a declared oversize is
+    # rejected up-front (the connection is closed) and the incremental limit is
+    # armed on the body for chunked/unknown-length responses; for non-streaming,
+    # the body is already buffered so we check its actual size. Returns false
+    # (allow) when no cap is set.
+    def response_too_large?(target_response, headers, body)
+      return false unless @max_response_length
+
+      declared = headers['Content-Length']
+      declared_oversize = declared && declared.to_i > @max_response_length
+
+      if target_response.respond_to?(:max_response_length=)
+        if declared_oversize
+          target_response.close
+          return true
+        end
+        target_response.max_response_length = @max_response_length
+        false
+      else
+        buffered = body.sum { |part| part.to_s.bytesize }
+        declared_oversize || buffered > @max_response_length
+      end
+    end
 
     # Resolve the Net::HTTP request class for an HTTP method, or nil if there is
     # no matching Net::HTTP::<Verb> (unknown/unsupported method -> 501).

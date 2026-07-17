@@ -91,3 +91,16 @@ class Net::HTTPResponse
     @socket = nil
   end
 end
+
+# Fail loudly (a warning, so non-streaming users are unaffected) if a future
+# net/http drops the private internals this patch reaches into, instead of
+# breaking mysteriously at request time. The planned Fiber-based rewrite (see
+# MODERNIZATION_PLAN.md P1-5) removes this dependency entirely.
+_rack_proxy_missing_net_http = %i[begin_transport end_transport edit_path].reject do |m|
+  Net::HTTP.private_method_defined?(m) || Net::HTTP.method_defined?(m)
+end
+_rack_proxy_missing_net_http << :read_new unless Net::HTTPResponse.respond_to?(:read_new, true)
+unless _rack_proxy_missing_net_http.empty?
+  warn "net_http_hacked: Net::HTTP internals #{_rack_proxy_missing_net_http.join(', ')} are " \
+       "missing on Ruby #{RUBY_VERSION}; Rack::Proxy streaming may be broken. Use streaming: false."
+end
