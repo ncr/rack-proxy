@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "rack"
 require "net_http_hacked"
 require "rack/http_streaming_response"

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 ###
 # Open http://localhost:3000/test.php to trigger proxy
 ###

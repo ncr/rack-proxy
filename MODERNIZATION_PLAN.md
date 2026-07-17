@@ -7,10 +7,35 @@
 >   `:ca_file`/`:cert_store` (P1-6, incl. hermetic VERIFY_PEER-success test),
 >   `:open_timeout`/`:write_timeout` (P2-2), `:min_version`/`:max_version` (P2-8),
 >   rack pin + `require "rack"` (P1-7), `:max_response_length` (P2-3), example load
->   safety (P2-5 partial — physical move + README deferred to Batch 4), and a
->   load-time guard on the monkey-patch (P1-5 interim).
-> - **Still open:** P1-5 the Fiber-based rewrite that retires `net_http_hacked.rb`
->   (high-risk, deserves a dedicated pass); Batch 4 (docs, supply-chain, README, polish).
+>   safety (P2-5 partial), and a load-time guard on the monkey-patch (P1-5 interim).
+> - Batch 4 docs & supply-chain — DONE, branch `modernization/batch-4-docs-supply-chain`:
+>   `SECURITY.md` + README "Security considerations" (P1-8), `CHANGELOG.md` +
+>   gemspec metadata/MFA (P1-9), README accuracy overhaul (P2-1), `CONTRIBUTING.md`,
+>   `frozen_string_literal` pragmas (P2-7 partial), LICENSE year.
+>
+> ## Continuation / handoff (read this if resuming on another machine)
+>
+> Four branches are **stacked**, each its own PR — merge in order:
+> `batch-1-green-loop` → `batch-2-security` → `batch-3-tls-timeouts` → `batch-4-docs-supply-chain`.
+> `master` is untouched. Run tests with `bundle exec rake test` (offline, ~0.2s);
+> CI covers Ruby 3.1–3.4 × Rack 2/3. See [`CLAUDE.md`](CLAUDE.md) for invariants/traps.
+>
+> **Decisions locked in:** (1) the P0-4 SSRF `backend_allowed?` default stays
+> allow-all until a **major** version bump; (2) the P1-5 Fiber rewrite is
+> deferred as its own dedicated, heavily-tested pass (not started).
+>
+> **Still open / next up:**
+> - **P1-5** — Fiber-based rewrite retiring `lib/net_http_hacked.rb` (the one
+>   high-risk item; monkey-patch works and is guarded in the meantime).
+> - **P2-7 remainder** — adopt Standard/RuboCop and add a lint + `bundler-audit`
+>   CI job (frozen-string pragmas already landed; a full `--fix` should be its own commit).
+> - **P2-5 remainder** — physically move `lib/rack_proxy_examples/` → `examples/`
+>   and rework the README to copy-paste snippets (deferred so the documented
+>   `require 'rack_proxy_examples/...'` flow keeps working until then).
+> - **P3 polish** — SimpleCov coverage floor, `.github` issue/PR templates,
+>   opt-in credential/XFF stripping conveniences.
+> - When ready to release, bump `lib/rack/proxy/version.rb`, move the CHANGELOG
+>   `[Unreleased]` section under the new version, tag `vX.Y.Z`.
 
 Baseline already in place (do **not** redo): VERIFY_PEER default (proxy.rb:149/158), 502-on-connect-error mapping (proxy.rb:172), Rack 3 `Headers`/Rack 2 `HeaderHash` branch (proxy.rb:44-50), non-rewindable body guard (proxy.rb:131), `:logger` option. Everything below builds on that.
 
