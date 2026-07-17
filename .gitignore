@@ -1,3 +1,6 @@
 pkg/*
 *.gem
 .bundle
+
+# Lockfiles for the CI-only gemfiles are resolved fresh per run.
+gemfiles/*.lock

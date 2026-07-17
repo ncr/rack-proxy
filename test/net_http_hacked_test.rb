@@ -2,10 +2,18 @@ require "test_helper"
 require "net_http_hacked"
 
 class NetHttpHackedTest < Test::Unit::TestCase
-  
+
+  def setup
+    @server, @port = ProxyTestServer.start_server(ssl: false)
+  end
+
+  def teardown
+    @server&.shutdown
+  end
+
   def test_net_http_hacked
     req = Net::HTTP::Get.new("/")
-    http = Net::HTTP.start("www.iana.org", "80")
+    http = Net::HTTP.start("127.0.0.1", @port)
 
     # Response code
     res = http.begin_request_hacked(req)
@@ -32,5 +40,5 @@ class NetHttpHackedTest < Test::Unit::TestCase
 
     http.end_request_hacked
   end
-  
+
 end
