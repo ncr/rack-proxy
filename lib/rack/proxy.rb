@@ -1,3 +1,4 @@
+require "rack"
 require "net_http_hacked"
 require "rack/http_streaming_response"
 require "rack/proxy/version"
@@ -97,9 +98,22 @@ module Rack
       @streaming = opts.fetch(:streaming, true)
       @backend = opts[:backend] ? URI(opts[:backend]) : nil
       @read_timeout = opts.fetch(:read_timeout, 60)
+      # Connect and per-write deadlines. Without these a slow/hostile backend can
+      # stall a thread for Net::HTTP's 60s defaults even with a small read_timeout.
+      @open_timeout = opts[:open_timeout]
+      @write_timeout = opts[:write_timeout]
+      # :ssl_version pins an exact protocol and is deprecated (it forbids TLS 1.3);
+      # prefer :min_version / :max_version, which map to Net::HTTP#min_version=/#max_version=.
       @ssl_version = opts[:ssl_version]
+      @min_version = opts[:min_version]
+      @max_version = opts[:max_version]
       @cert = opts[:cert]
       @key = opts[:key]
+      # Trust anchors for VERIFY_PEER: :ca_file is a PEM bundle path, :cert_store
+      # an OpenSSL::X509::Store. Use these for private-CA backends instead of
+      # disabling verification with ssl_verify_none.
+      @ca_file = opts[:ca_file]
+      @cert_store = opts[:cert_store]
       # SSL verification: defaults to VERIFY_PEER (Ruby's Net::HTTP default).
       # Pass ssl_verify_none: true to explicitly disable cert verification, or
       # pass verify_mode: <OpenSSL::SSL::VERIFY_*> for full control.
@@ -190,13 +204,13 @@ module Rack
 
         if @streaming
           # streaming response (the actual network communication is deferred, a.k.a. streamed)
-          target_response = HttpStreamingResponse.new(target_request, backend.host, backend.port)
-          configure_backend_connection(target_response, use_ssl: use_ssl, read_timeout: read_timeout)
+          target_response = HttpStreamingResponse.new(target_request, backend.host, backend.port) do |http|
+            configure_backend_connection(http, use_ssl: use_ssl, read_timeout: read_timeout)
+          end
           target_response.logger = @logger if @logger
         else
           http = Net::HTTP.new(backend.host, backend.port)
           configure_backend_connection(http, use_ssl: use_ssl, read_timeout: read_timeout)
-          http.set_debug_output(@logger) if @logger
 
           target_response = http.start do
             http.request(target_request)
@@ -235,16 +249,27 @@ module Rack
       nil
     end
 
-    # Single source of truth for TLS/timeout setup, applied identically to both
-    # the streaming response and the non-streaming Net::HTTP connection so a TLS
-    # option (notably the VERIFY_PEER default) can never land on only one path.
+    # Single source of truth for TLS/timeout setup, applied to the (real
+    # Net::HTTP) connection on both the streaming and non-streaming paths so a
+    # TLS option — notably the VERIFY_PEER default — can never land on only one.
     def configure_backend_connection(conn, use_ssl:, read_timeout:)
       conn.use_ssl = use_ssl
       conn.read_timeout = read_timeout
-      conn.ssl_version = @ssl_version if @ssl_version
-      conn.verify_mode = (@verify_mode || OpenSSL::SSL::VERIFY_PEER) if use_ssl
-      conn.cert = @cert if @cert
-      conn.key = @key if @key
+      conn.open_timeout = @open_timeout if @open_timeout
+      conn.write_timeout = @write_timeout if @write_timeout
+
+      if use_ssl
+        conn.verify_mode = @verify_mode || OpenSSL::SSL::VERIFY_PEER
+        conn.ca_file = @ca_file if @ca_file
+        conn.cert_store = @cert_store if @cert_store
+        conn.min_version = @min_version if @min_version
+        conn.max_version = @max_version if @max_version
+        conn.ssl_version = @ssl_version if @ssl_version # deprecated; prefer min/max_version
+        conn.cert = @cert if @cert
+        conn.key = @key if @key
+      end
+
+      conn.set_debug_output(@logger) if @logger
       conn
     end
   end

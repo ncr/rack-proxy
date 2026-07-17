@@ -12,8 +12,13 @@ module Rack
 
     attr_accessor :use_ssl, :verify_mode, :read_timeout, :ssl_version, :cert, :key, :logger
 
-    def initialize(request, host, port = nil)
-      @request, @host, @port = request, host, port
+    # An optional block receives the Net::HTTP instance for configuration before
+    # it connects — this is the single source of truth used by Rack::Proxy (see
+    # Rack::Proxy#configure_backend_connection). When no block is given, the
+    # public accessors above are applied instead (backward-compatible path for
+    # direct users of this class).
+    def initialize(request, host, port = nil, &configure)
+      @request, @host, @port, @configure = request, host, port, configure
     end
 
     def body
@@ -68,13 +73,17 @@ module Rack
     # Net::HTTP
     def session
       @session ||= Net::HTTP.new(host, port).tap do |http|
-        http.use_ssl = use_ssl
-        http.verify_mode = verify_mode
-        http.read_timeout = read_timeout
-        http.ssl_version = ssl_version if ssl_version
-        http.cert = cert if cert
-        http.key = key if key
-        http.set_debug_output(logger) if logger
+        if @configure
+          @configure.call(http)
+        else
+          http.use_ssl = use_ssl
+          http.verify_mode = verify_mode
+          http.read_timeout = read_timeout
+          http.ssl_version = ssl_version if ssl_version
+          http.cert = cert if cert
+          http.key = key if key
+          http.set_debug_output(logger) if logger
+        end
         http.start
       end
     end
