@@ -19,7 +19,7 @@ Installation
 Add the following to your `Gemfile`:
 
 ```
-gem 'rack-proxy', '~> 0.8.0'
+gem 'rack-proxy', '~> 1.0'
 ```
 
 Or install:
@@ -188,7 +188,7 @@ From [`examples/example_service_proxy.rb`](examples/example_service_proxy.rb):
 # 1. rails new test_app
 # 2. cd test_app
 # 3. install Rack-Proxy in `Gemfile`
-#    a. `gem 'rack-proxy', '~> 0.8.0'`
+#    a. `gem 'rack-proxy', '~> 1.0'`
 # 4. install gem: `bundle install`
 # 5. copy the class into your app and mount it from `config/initializers/proxy.rb`
 # 6. run: `SERVICE_URL=http://guides.rubyonrails.org rails server`
@@ -380,6 +380,32 @@ end
 
 Upgrading
 ----
+
+### 0.8.x → 1.0.0
+
+1.0.0 is a breaking release; the full list is in [CHANGELOG.md](CHANGELOG.md). The changes most likely to need action:
+
+**Host-derived backends now require an explicit opt-in.** If you rely on the destination being derived from the request's `Host` header (no `:backend` option — this includes every subclass that routes by rewriting `env["HTTP_HOST"]`), such requests now return `502`. Restore the behavior explicitly, ideally with an allowlist:
+
+```ruby
+class MyProxy < Rack::Proxy
+  def backend_allowed?(backend)
+    %w[api.internal.example.com].include?(backend.host)
+  end
+end
+
+MyProxy.new(allow_dynamic_backend: true)
+```
+
+Deployments with a fixed `:backend` (or that set `env["rack.backend"]` in `rewrite_env`) need no change.
+
+**Backend failures return `502` instead of raising.** If you rescued `OpenSSL::SSL::SSLError`, `Errno::ECONNREFUSED`, timeouts, etc. around the proxy, inspect the response status instead. Malformed request URIs map to `400` and unknown HTTP methods to `501`.
+
+**`require "rack_proxy_examples/..."` is gone.** The examples are copy-paste snippets in [`examples/`](examples/) now — copy the class into your app and mount it yourself.
+
+**`net_http_hacked` is gone.** The library streams via the public `Net::HTTP` API; if external code called `begin_request_hacked`/`end_request_hacked`, vendor the old file from a 0.8.x release and plan a migration.
+
+**Other behavior changes to be aware of:** hop-by-hop request headers (including `Proxy-Authorization`) are no longer forwarded; gzip bodies are forwarded still-compressed in `streaming: false` mode (inflate in `rewrite_response` if you inspect body text); body-less POST/PUT sends `Content-Length: 0`; Ruby >= 3.0 and Rack 2.x–3.x are required.
 
 ### 0.7.x → 0.8.0
 

@@ -30,6 +30,15 @@
 >   Standard + `bundler-audit` + CI lint job, `standardrb --fix` as its own
 >   commit (P2-7 remainder). Dev tooling lives only in the default Gemfile; the
 >   matrix gemfiles and the ruby-head canary stay lean.
+> - Batch 7 — v1.0.0 release prep, branch `modernization/batch-7-v1` (BREAKING):
+>   P0-4 SSRF flip — Host-derived backends now 502 unless
+>   `allow_dynamic_backend: true` (with logger hint + guards); `net_http_hacked`
+>   shim DELETED (subprocess test guards against reintroduction); version
+>   1.0.0; CHANGELOG restructured with a Breaking-changes section; README
+>   0.8→1.0 Upgrading guide; SECURITY.md supported-versions/scope updated;
+>   SemVer statement in CONTRIBUTING; `.github/workflows/release.yml` (tag-
+>   triggered rubygems Trusted Publishing — needs one-time rubygems.org +
+>   GitHub `release` environment setup, see the workflow header).
 >
 > ## Continuation / handoff (read this if resuming on another machine)
 >
@@ -44,13 +53,13 @@
 > allow-all until a **major** version bump; (2) `net_http_hacked.rb` stays as a
 > deprecated functional shim for exactly one release, then gets deleted.
 >
-> **Still open / next up:**
-> - **Release** — bump `lib/rack/proxy/version.rb`, move the CHANGELOG
->   `[Unreleased]` section under the new version, tag `vX.Y.Z`. Consider the
->   Trusted Publishing setup from P1-9 (rubygems.org side is manual).
-> - **Release after next** — delete the deprecated `lib/net_http_hacked.rb` shim.
-> - Everything else in the P0–P3 roadmap below has landed (see the progress
->   banner above).
+> **Still open (manual, maintainer-only):**
+> - Merge the seven stacked PRs in order, then push the `v1.0.0` tag.
+> - One-time Trusted Publishing setup before the tag: register the publisher on
+>   rubygems.org, create the protected `release` GitHub environment, revoke the
+>   old push key (see `.github/workflows/release.yml` header).
+> - The **entire P0–P3 roadmap below has landed**, including the P0-4 SSRF
+>   default flip and the shim deletion (both in the 1.0.0 major).
 
 Baseline already in place (do **not** redo): VERIFY_PEER default (now centralized in `configure_backend_connection`), 502-on-backend-error mapping, Rack 3 `Headers`/Rack 2 `HeaderHash` branch, non-rewindable body guard, `:logger` option. Line references in the item bodies below describe the codebase as it was when the plan was written — the progress banner above is the source of truth for what has landed.
 

@@ -1,0 +1,30 @@
+# Publishes the gem to rubygems.org when a version tag (v1.2.3) is pushed.
+#
+# Uses RubyGems Trusted Publishing (OIDC) — no API key is stored anywhere.
+# ONE-TIME SETUP required before the first release:
+#   1. On rubygems.org: gem page -> Ownership -> Trusted publishers -> add
+#      GitHub repo ncr/rack-proxy, workflow release.yml, environment `release`.
+#   2. On GitHub: Settings -> Environments -> create `release` (optionally
+#      require reviewers), so a pushed tag can't publish without the gate.
+#   3. Revoke any long-lived rubygems push key previously used by `rake release`.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write # OIDC token for rubygems.org Trusted Publishing
+      contents: write # allow the action to create the GitHub release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - run: bundle exec rake test
+      - uses: rubygems/release-gem@v1

@@ -92,9 +92,12 @@ smoke test, and a blocking lint job (standardrb + coverage floor + bundler-audit
   `test/live_smoke_test.rb`.
 - **Keep the test framework as `test-unit`.** Do not migrate to RSpec/Minitest as
   a side effect of other work.
-- **The default backend is the client's own `Host` header** when no `:backend`
-  is configured (`perform_request`). This is intentional but an SSRF footgun;
-  hardening is tracked in MODERNIZATION_PLAN P0-4. Don't widen this behavior.
+- **Dynamic (Host-derived) backends are refused by default since 1.0** — with
+  no `:backend` and no `env["rack.backend"]`, requests 502 unless
+  `allow_dynamic_backend: true` was passed. This is a security invariant, not a
+  bug: never "fix" a 502 here by defaulting the option on or by falling back to
+  `source_request` silently. Guards: `test_dynamic_backend_refused_by_default`,
+  `test_static_backend_requires_no_opt_in`, `test_rack_backend_env_requires_no_opt_in`.
 
 ## Security posture
 

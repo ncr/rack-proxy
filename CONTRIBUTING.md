@@ -60,6 +60,16 @@ BUNDLE_GEMFILE=gemfiles/rack_2.gemfile bundle exec rake test
 4. Open the PR describing the streaming/non-streaming paths affected and the
    backend scheme, if relevant.
 
+## Versioning & releases
+
+From 1.0.0 on, this project follows [SemVer](https://semver.org) strictly:
+breaking changes (including dropping a Ruby/Rack version or changing a security
+default) ship only in majors; deprecations get at least one minor with a
+runtime warning where practical. To release: move the `[Unreleased]` CHANGELOG
+section under the new version, bump `lib/rack/proxy/version.rb`, merge, and
+push a `vX.Y.Z` tag — `.github/workflows/release.yml` publishes to
+rubygems.org via Trusted Publishing (OIDC, no long-lived credentials).
+
 ## Reporting security issues
 
 Please do **not** open a public issue. See [`SECURITY.md`](SECURITY.md).

@@ -7,12 +7,14 @@ threat model below alongside the "Security considerations" section of the README
 
 ## Supported versions
 
-Security fixes are released for the latest `0.x` minor series. Older versions are
-not maintained — please upgrade before reporting.
+Security fixes are released for the latest major series. The last `0.x` series
+receives fixes for critical issues only, for a transition period — please
+upgrade to `1.x`.
 
 | Version | Supported |
 | ------- | --------- |
-| 0.8.x   | ✅        |
+| 1.0.x   | ✅        |
+| 0.8.x   | critical fixes only |
 | < 0.8   | ❌        |
 
 ## Reporting a vulnerability
@@ -42,8 +44,9 @@ headers being forwarded when they should not be, request/response smuggling,
 verification defaults that are weaker than documented, or a crash/`500` where a
 `4xx`/`5xx` mapping is expected.
 
-Out of scope: insecure **configuration or subclassing** of the library. In
-particular, deriving the backend from a client-controlled `Host` header without
-an allowlist is an SSRF/open-proxy risk that is the deployer's responsibility to
-prevent — see `backend_allowed?` and the README. If the documentation is what led
-you astray, that is in scope: tell us and we will fix the docs.
+Out of scope: insecure **configuration or subclassing** of the library. Since
+1.0, deriving the backend from the client-controlled `Host` header requires an
+explicit `allow_dynamic_backend: true`; opting in without a `backend_allowed?`
+allowlist is an SSRF/open-proxy risk that is the deployer's responsibility —
+see the README "Security considerations". If the documentation is what led you
+astray, that is in scope: tell us and we will fix the docs.
