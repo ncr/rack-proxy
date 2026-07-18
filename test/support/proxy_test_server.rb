@@ -18,6 +18,7 @@ require "tempfile"
 #   GET  /cookies/set  -> sets a Set-Cookie header (?test=<value>)
 #   GET  /echo-headers -> sets x-custom: value-here, body "ok"
 #   POST /echo-body    -> echoes the request body verbatim
+#   GET  /echo-request-headers -> body lists received cookie/authorization/XFF
 #   GET  /no-content   -> 204 No Content
 #   GET  /not-modified -> 304 Not Modified
 #   GET  /empty        -> 200 with an empty body
@@ -72,6 +73,16 @@ module ProxyTestServer
     end
 
     server.mount_proc("/echo-body") { |req, res| res.body = req.body.to_s }
+
+    # Echoes selected request headers back in the body (one "name: value" line
+    # per header actually received) so tests can assert what the proxy forwarded.
+    server.mount_proc("/echo-request-headers") do |req, res|
+      res.content_type = "text/plain"
+      res.body = %w[cookie authorization x-forwarded-for].filter_map { |name|
+        value = req[name]
+        "#{name}: #{value}" if value
+      }.join("\n")
+    end
     server.mount_proc("/no-content")   { |_req, res| res.status = 204 }
     server.mount_proc("/not-modified") { |_req, res| res.status = 304 }
     server.mount_proc("/empty")        { |_req, res| res.body = "" }

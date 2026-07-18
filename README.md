@@ -63,6 +63,8 @@ Options can be set when initializing the middleware or overriding a method.
 * `:ssl_version` - **deprecated**; pins an exact protocol (forbids TLS 1.3). Use `:min_version` / `:max_version`.
 * `:max_response_length` - cap (in bytes) on the backend response size; a larger response is refused with `502` (streaming aborts once the cap is passed).
 * `:username` / `:password` - HTTP Basic credentials sent to the backend.
+* `:strip_credentials` - when `true`, drop the client's `Cookie` and `Authorization` headers instead of forwarding them — see [Security considerations](#security-considerations).
+* `:replace_x_forwarded_for` - when `true`, discard the client-supplied `X-Forwarded-For` chain and forward only this hop's `REMOTE_ADDR` (default appends to the chain) — see [Security considerations](#security-considerations).
 * `:logger` - any object responding to `#<<` (e.g. `$stdout`, a `StringIO`, or a Ruby `Logger`). Wired to `Net::HTTP#set_debug_output` so the HTTP wire-level conversation is written to the sink. Useful for debugging.
 
 Two request-scoped overrides can also be set in `env` (e.g. from `rewrite_env`):
@@ -95,9 +97,9 @@ rack-proxy forwards attacker-influenced requests to a backend and relays the bac
 
     A refused backend is answered with `502`. (Making dynamic, `Host`-derived backends opt-in by default is planned for a future major version.)
 
-* **Credential forwarding.** All incoming `HTTP_*` headers are forwarded, including `Authorization` and `Cookie`. Don't proxy to a different trust domain with credentials attached; strip them in `rewrite_env` (e.g. `env['HTTP_COOKIE'] = ''`). Over an `http://` backend these travel in cleartext.
+* **Credential forwarding.** All incoming `HTTP_*` headers are forwarded, including `Authorization` and `Cookie`. Don't proxy to a different trust domain with credentials attached — pass `strip_credentials: true` to drop both (or do finer-grained filtering in `rewrite_env`). Over an `http://` backend these travel in cleartext.
 
-* **X-Forwarded-For.** rack-proxy appends `REMOTE_ADDR` to any inbound `X-Forwarded-For`. If your clients are not behind a trusted proxy, the inbound value is attacker-controlled; sanitize it in `rewrite_env` when the backend trusts that header.
+* **X-Forwarded-For.** rack-proxy appends `REMOTE_ADDR` to any inbound `X-Forwarded-For`. If your clients are not behind a trusted proxy, the inbound value is attacker-controlled; pass `replace_x_forwarded_for: true` to forward only the directly-connected peer's address when the backend trusts that header.
 
 * **TLS verification** defaults to `VERIFY_PEER`. For private-CA backends use `:ca_file` / `:cert_store` rather than `ssl_verify_none: true`.
 

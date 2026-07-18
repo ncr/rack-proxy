@@ -278,6 +278,51 @@ class RackProxyTest < Test::Unit::TestCase
     end
   end
 
+  # P3-1: opt-in hardening. :strip_credentials must drop Cookie/Authorization
+  # from the forwarded request; without it both forward verbatim (standard
+  # proxy behavior, guarded here so neither direction regresses silently).
+  def test_strip_credentials_removes_cookie_and_authorization
+    with_webrick_proxy(strip_credentials: true) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get '/echo-request-headers', {},
+        'HTTP_COOKIE' => 'session=s3cr3t', 'HTTP_AUTHORIZATION' => 'Bearer tok'
+      assert last_response.ok?
+      assert_not_match(/^cookie:/, last_response.body, 'Cookie must be stripped')
+      assert_not_match(/^authorization:/, last_response.body, 'Authorization must be stripped')
+    end
+  end
+
+  def test_credentials_forwarded_by_default
+    with_webrick_proxy do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get '/echo-request-headers', {},
+        'HTTP_COOKIE' => 'session=s3cr3t', 'HTTP_AUTHORIZATION' => 'Bearer tok'
+      assert_match(/^cookie: session=s3cr3t$/, last_response.body)
+      assert_match(/^authorization: Bearer tok$/, last_response.body)
+    end
+  end
+
+  # P3-1: :replace_x_forwarded_for must hide the client-supplied chain and
+  # forward only this hop's REMOTE_ADDR; the default appends to the chain.
+  def test_replace_x_forwarded_for_hides_inbound_chain
+    with_webrick_proxy(replace_x_forwarded_for: true) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get '/echo-request-headers', {},
+        'HTTP_X_FORWARDED_FOR' => '203.0.113.9', 'REMOTE_ADDR' => '10.0.0.5'
+      assert_match(/^x-forwarded-for: 10\.0\.0\.5$/, last_response.body,
+        'inbound X-Forwarded-For must be replaced with REMOTE_ADDR')
+    end
+  end
+
+  def test_x_forwarded_for_appends_by_default
+    with_webrick_proxy do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get '/echo-request-headers', {},
+        'HTTP_X_FORWARDED_FOR' => '203.0.113.9', 'REMOTE_ADDR' => '10.0.0.5'
+      assert_match(/^x-forwarded-for: 203\.0\.113\.9, 10\.0\.0\.5$/, last_response.body)
+    end
+  end
+
   # A request body must round-trip through the default (streaming) path too —
   # the non-streaming POST coverage alone would let a fiber-path body bug slip.
   def test_post_body_is_forwarded_streaming

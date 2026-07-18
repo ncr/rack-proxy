@@ -133,6 +133,13 @@ module Rack
       @username = opts[:username]
       @password = opts[:password]
 
+      # Opt-in request hardening (see README "Security considerations"):
+      # :strip_credentials drops Cookie/Authorization from the forwarded
+      # request; :replace_x_forwarded_for discards the client-supplied
+      # X-Forwarded-For chain and forwards only this hop's REMOTE_ADDR.
+      @strip_credentials = opts[:strip_credentials]
+      @replace_x_forwarded_for = opts[:replace_x_forwarded_for]
+
       # Optional logger for Net::HTTP debug output. Accepts anything with a #<< method
       # (e.g. $stdout, a StringIO, or a Ruby Logger instance).
       @logger = opts[:logger]
@@ -187,7 +194,19 @@ module Rack
         target_request = request_class.new(full_path)
 
         # Setup headers
-        target_request.initialize_http_header(self.class.extract_http_request_headers(source_request.env))
+        request_headers = self.class.extract_http_request_headers(source_request.env)
+        if @strip_credentials
+          request_headers.delete('Cookie')
+          request_headers.delete('Authorization')
+        end
+        if @replace_x_forwarded_for
+          if (remote_addr = env['REMOTE_ADDR'])
+            request_headers['X-Forwarded-For'] = remote_addr
+          else
+            request_headers.delete('X-Forwarded-For')
+          end
+        end
+        target_request.initialize_http_header(request_headers)
 
         # Forward the backend response verbatim: don't let Net::HTTP transparently
         # gzip-decode it, which would leave the forwarded Content-Length describing

@@ -33,6 +33,10 @@ This entry collects the 2026 modernization + security-hardening work (see
   exact protocol and forbids TLS 1.3).
 - `HttpStreamingResponse#close` so Rack servers release the backend connection on
   early termination (HEAD, 304, client disconnect) instead of leaking it until GC.
+- Opt-in request hardening: `strip_credentials: true` drops the client's
+  `Cookie`/`Authorization` headers from the forwarded request, and
+  `replace_x_forwarded_for: true` forwards only this hop's `REMOTE_ADDR`
+  instead of appending to the client-supplied `X-Forwarded-For` chain.
 - Project scaffolding: `SECURITY.md`, `CHANGELOG.md`, `CONTRIBUTING.md`,
   `CLAUDE.md`/`AGENTS.md`, GitHub Actions CI (Ruby 3.1–3.4 × Rack 2/3), Dependabot.
 
