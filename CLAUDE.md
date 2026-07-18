@@ -14,6 +14,8 @@ The living improvement roadmap is [`MODERNIZATION_PLAN.md`](MODERNIZATION_PLAN.m
 bundle install
 bundle exec rake test        # full suite, fully OFFLINE, ~2-3s
 LIVE=1 bundle exec rake test  # additionally runs real-internet smoke tests
+bundle exec standardrb       # style check, CI-blocking (--fix to autofix)
+COVERAGE=1 bundle exec rake test  # SimpleCov, ratcheted floor (CI-enforced)
 
 # Run the suite against a specific Rack major (CI does both):
 BUNDLE_GEMFILE=gemfiles/rack_3.gemfile bundle exec rake test
@@ -21,8 +23,8 @@ BUNDLE_GEMFILE=gemfiles/rack_2.gemfile bundle exec rake test
 ```
 
 The default suite must never touch the network. CI (`.github/workflows/ci.yml`)
-runs the matrix Ruby 3.1–3.4 × Rack 2/3, a `ruby head` canary, and a gem-build
-smoke test.
+runs the matrix Ruby 3.1–3.4 × Rack 2/3, a `ruby head` canary, a gem-build
+smoke test, and a blocking lint job (standardrb + coverage floor + bundler-audit).
 
 ## Architecture (two core files + a deprecated shim, ~500 lines)
 

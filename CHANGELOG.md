@@ -39,8 +39,9 @@ This entry collects the 2026 modernization + security-hardening work (see
   instead of appending to the client-supplied `X-Forwarded-For` chain.
 - Project scaffolding: `SECURITY.md`, `CHANGELOG.md`, `CONTRIBUTING.md`,
   `CLAUDE.md`/`AGENTS.md`, GitHub Actions CI (Ruby 3.1–3.4 × Rack 2/3),
-  Dependabot, issue/PR templates, and SimpleCov with a ratcheted coverage
-  floor (`COVERAGE=1`).
+  Dependabot, issue/PR templates, SimpleCov with a ratcheted coverage floor
+  (`COVERAGE=1`), and Standard (`standardrb`) + `bundler-audit` enforced by a
+  CI lint job.
 
 ### Changed
 

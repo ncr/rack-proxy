@@ -22,29 +22,35 @@
 >   `decode_content` forced off (verbatim gzip pass-through). New guards: close
 >   after headers, mid-stream break/abort, HEAD, streaming 204/304, mid-stream
 >   backend death, never-retry, shim deprecation warning.
+> - Batch 6 lint & polish — DONE, branch `modernization/batch-6-lint-polish`:
+>   opt-in `strip_credentials`/`replace_x_forwarded_for` (P3-1); examples moved
+>   `lib/rack_proxy_examples/` → `examples/` off the load path, README reworked
+>   to copy-paste snippets (P2-5 remainder); SimpleCov behind `COVERAGE=1` with a
+>   ratcheted floor line 96.5/branch 84.5 (P3-2); issue/PR templates (P3-4);
+>   Standard + `bundler-audit` + CI lint job, `standardrb --fix` as its own
+>   commit (P2-7 remainder). Dev tooling lives only in the default Gemfile; the
+>   matrix gemfiles and the ruby-head canary stay lean.
 >
 > ## Continuation / handoff (read this if resuming on another machine)
 >
-> Five branches are **stacked**, each its own PR — merge in order:
+> Six branches are **stacked**, each its own PR — merge in order:
 > `batch-1-green-loop` → `batch-2-security` → `batch-3-tls-timeouts` →
-> `batch-4-docs-supply-chain` → `batch-5-fiber-streaming`.
-> `master` is untouched. Run tests with `bundle exec rake test` (offline, ~0.2s);
-> CI covers Ruby 3.1–3.4 × Rack 2/3. See [`CLAUDE.md`](CLAUDE.md) for invariants/traps.
+> `batch-4-docs-supply-chain` → `batch-5-fiber-streaming` → `batch-6-lint-polish`.
+> `master` is untouched. Run tests with `bundle exec rake test` (offline, ~2-3s);
+> CI covers Ruby 3.1–3.4 × Rack 2/3 plus a lint/audit/coverage job. See
+> [`CLAUDE.md`](CLAUDE.md) for invariants/traps.
 >
 > **Decisions locked in:** (1) the P0-4 SSRF `backend_allowed?` default stays
 > allow-all until a **major** version bump; (2) `net_http_hacked.rb` stays as a
 > deprecated functional shim for exactly one release, then gets deleted.
 >
 > **Still open / next up:**
-> - **P2-7 remainder** — adopt Standard/RuboCop and add a lint + `bundler-audit`
->   CI job (frozen-string pragmas already landed; a full `--fix` should be its own commit).
-> - **P2-5 remainder** — physically move `lib/rack_proxy_examples/` → `examples/`
->   and rework the README to copy-paste snippets (deferred so the documented
->   `require 'rack_proxy_examples/...'` flow keeps working until then).
-> - **P3 polish** — SimpleCov coverage floor, `.github` issue/PR templates,
->   opt-in credential/XFF stripping conveniences.
-> - When ready to release, bump `lib/rack/proxy/version.rb`, move the CHANGELOG
->   `[Unreleased]` section under the new version, tag `vX.Y.Z`.
+> - **Release** — bump `lib/rack/proxy/version.rb`, move the CHANGELOG
+>   `[Unreleased]` section under the new version, tag `vX.Y.Z`. Consider the
+>   Trusted Publishing setup from P1-9 (rubygems.org side is manual).
+> - **Release after next** — delete the deprecated `lib/net_http_hacked.rb` shim.
+> - Everything else in the P0–P3 roadmap below has landed (see the progress
+>   banner above).
 
 Baseline already in place (do **not** redo): VERIFY_PEER default (now centralized in `configure_backend_connection`), 502-on-backend-error mapping, Rack 3 `Headers`/Rack 2 `HeaderHash` branch, non-rewindable body guard, `:logger` option. Line references in the item bodies below describe the codebase as it was when the plan was written — the progress banner above is the source of truth for what has landed.
 

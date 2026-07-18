@@ -322,6 +322,40 @@ class RackProxyTest < Test::Unit::TestCase
     end
   end
 
+  # Pins the documented ordering: the strip runs on the extracted headers
+  # AFTER rewrite_env, so an Authorization injected there is stripped too —
+  # while the :username/:password credential survives (applied to the outgoing
+  # request after the strip). Proxy-owned credentials belong in those options.
+  def test_strip_credentials_applies_after_rewrite_env
+    with_webrick_proxy(strip_credentials: true, username: "u", password: "p") do |port, proxy|
+      def proxy.rewrite_env(env)
+        env["HTTP_AUTHORIZATION"] = "Bearer injected-by-rewrite-env"
+        super
+      end
+      proxy.host = "127.0.0.1:#{port}"
+      get "/echo-request-headers"
+      assert last_response.ok?
+      assert_not_match(/injected-by-rewrite-env/, last_response.body,
+        "a credential injected in rewrite_env is stripped like any other")
+      assert_match(/^authorization: Basic dTpw$/, last_response.body,
+        ":username/:password must survive strip_credentials")
+    end
+  end
+
+  # The REMOTE_ADDR-less arm of :replace_x_forwarded_for: with no peer address
+  # to substitute, the header must be dropped entirely, not sent empty.
+  def test_replace_x_forwarded_for_without_remote_addr_drops_header
+    with_webrick_proxy(replace_x_forwarded_for: true) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      env = Rack::MockRequest.env_for("/echo-request-headers")
+      env["HTTP_X_FORWARDED_FOR"] = "203.0.113.9"
+      env.delete("REMOTE_ADDR")
+      _status, _headers, body = proxy.call(env)
+      assert_not_match(/x-forwarded-for/, body.to_s,
+        "with no REMOTE_ADDR, X-Forwarded-For must be dropped, not forwarded or sent empty")
+    end
+  end
+
   # A request body must round-trip through the default (streaming) path too —
   # the non-streaming POST coverage alone would let a fiber-path body bug slip.
   def test_post_body_is_forwarded_streaming
