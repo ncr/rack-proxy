@@ -10,9 +10,9 @@ module Rack
   # The request runs inside a Fiber, using only the public block form of
   # Net::HTTP#request: the Fiber pauses (`Fiber.yield res`) the moment the
   # status and headers are available, and #each resumes it to pull body chunks
-  # as the server consumes them. This replaces the historical monkey-patch of
-  # private net/http internals (`net_http_hacked.rb`, now a deprecated shim)
-  # and inherits upstream's handling of 1xx interim responses, keep-alive
+  # as the server consumes them. This replaced the 2010-era monkey-patch of
+  # private net/http internals (`net_http_hacked.rb`, deleted in 1.0) and
+  # inherits upstream's handling of 1xx interim responses, keep-alive
   # negotiation, and transport errors.
   #
   # A Fiber can only be resumed from the thread that created it. The request

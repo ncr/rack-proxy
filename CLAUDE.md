@@ -41,10 +41,10 @@ smoke test, and a blocking lint job (standardrb + coverage floor + bundler-audit
   headers are in, and `#each` resumes it to pull body chunks; `#each`/`#close`
   tear the connection down (early termination unwinds the Fiber via
   `Fiber#raise`).
-- **`lib/net_http_hacked.rb`** — the *former* streaming engine: a monkey-patch
-  of private `Net::HTTP` internals, now a **deprecated shim** kept for one
-  release for external requirers. Nothing in the library loads it anymore; it
-  warns on require. Don't build anything new on it.
+- `lib/net_http_hacked.rb` — the *former* streaming engine (a monkey-patch of
+  private `Net::HTTP` internals) — was **deleted in 1.0**. Do not reintroduce
+  it or anything like it; a subprocess test asserts the library loads without
+  defining the old hacked methods.
 
 ## Invariants — do not regress these (each has a guarding test)
 

@@ -73,11 +73,15 @@ This entry collects the 2026 modernization + security-hardening work (see
 ### Deprecated
 
 - `:ssl_version` — use `:min_version` / `:max_version`.
-- `require "net_http_hacked"` — the monkey-patch is no longer used by the
-  library. The file remains as a functional shim that warns on require, and
-  will be removed in a future release.
 
 ### Removed
+
+- `lib/net_http_hacked.rb` — the 2010-era monkey-patch of private `Net::HTTP`
+  internals. The library stopped using it when streaming moved to the public
+  `Net::HTTP` API (see Changed); `require "net_http_hacked"` and the
+  `begin_request_hacked` / `end_request_hacked` methods are gone. If external
+  code still depends on them, vendor the file from a 0.8.x release — and plan
+  to migrate; it breaks under modern net/http refactors.
 
 - The bundled examples moved from the gem load path
   (`lib/rack_proxy_examples/`) to [`examples/`](examples/) in the repository.

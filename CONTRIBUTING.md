@@ -45,8 +45,8 @@ BUNDLE_GEMFILE=gemfiles/rack_2.gemfile bundle exec rake test
 - **Do not "simplify" the Fiber plumbing in `HttpStreamingResponse`.** The
   `max_retries = 0`, the `StreamAborted` unwind class, and the forced
   `decode_content = false` are load-bearing (see the trap list in
-  [`CLAUDE.md`](CLAUDE.md)). `lib/net_http_hacked.rb` is a deprecated shim
-  scheduled for removal — don't build on it.
+  [`CLAUDE.md`](CLAUDE.md)). The old `net_http_hacked.rb` monkey-patch was
+  deleted in 1.0 — do not reintroduce it.
 - **Keep the test framework as `test-unit`.**
 - New behavior needs a regression test; bug fixes should add a test that fails
   before the fix.

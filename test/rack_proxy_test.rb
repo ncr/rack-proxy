@@ -632,7 +632,10 @@ class RackProxyTest < Test::Unit::TestCase
   def test_dynamic_backend_refused_by_default
     server, port = ProxyTestServer.start_server
     hits = 0
-    server.mount_proc("/hit-counter") { |_req, res| hits += 1; res.body = "hit" }
+    server.mount_proc("/hit-counter") do |_req, res|
+      hits += 1
+      res.body = "hit"
+    end
 
     sink = StringIO.new
     proxy = HostProxy.new(logger: sink) # deliberately NOT allow_dynamic_backend
@@ -683,6 +686,20 @@ class RackProxyTest < Test::Unit::TestCase
     assert_equal 502, status
   ensure
     server&.shutdown
+  end
+
+  # The library must load standalone, print nothing, and must NOT define the
+  # old net_http_hacked monkey-patch (deleted in 1.0) — guards reintroduction.
+  # Runs in a subprocess so this file's own requires can't mask a regression.
+  def test_library_loads_cleanly_without_the_old_monkey_patch
+    lib = File.expand_path("../lib", __dir__)
+    out = IO.popen(
+      [RbConfig.ruby, "-I", lib, "-e",
+        'require "rack/proxy"; print Net::HTTP.method_defined?(:begin_request_hacked) ? "PATCHED" : "CLEAN"'],
+      err: [:child, :out], &:read
+    )
+    assert_equal "CLEAN", out,
+      "requiring rack/proxy must define no hacked methods and print nothing; got: #{out.inspect}"
   end
 
   # P0-5: an interim 103 Early Hints from the backend must be skipped so the
