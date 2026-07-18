@@ -102,6 +102,13 @@ module Rack
 
       @streaming = opts.fetch(:streaming, true)
       @backend = opts[:backend] ? URI(opts[:backend]) : nil
+      # With no :backend (and no env["rack.backend"]), the destination is
+      # derived from the client-controlled Host header. Since 1.0 that dynamic
+      # mode is refused (502) unless explicitly opted into, because a bare
+      # proxy would otherwise be an open proxy / SSRF pivot (cloud metadata
+      # endpoints, loopback, RFC1918). Combine the opt-in with a
+      # #backend_allowed? allowlist — see the README "Security considerations".
+      @allow_dynamic_backend = opts.fetch(:allow_dynamic_backend, false)
       @read_timeout = opts.fetch(:read_timeout, 60)
       # Connect and per-write deadlines. Without these a slow/hostile backend can
       # stall a thread for Net::HTTP's 60s defaults even with a small read_timeout.
@@ -160,13 +167,16 @@ module Rack
       triplet
     end
 
-    # SSRF guardrail. Override to restrict which backends this proxy may connect
-    # to; `backend` responds to #host, #port and #scheme. Return false to refuse,
-    # which makes the proxy respond 502. The default allows any backend for
-    # backward compatibility — but when no :backend is configured the destination
-    # is derived from the client-controlled Host header, so a subclass in that
-    # setup SHOULD override this to allowlist expected hosts (or set a fixed
-    # :backend). See the README "Security considerations".
+    # SSRF guardrail, consulted for EVERY request with the resolved backend
+    # (`backend` responds to #host, #port and #scheme). Return false to refuse,
+    # which makes the proxy respond 502. The default allows the backend, because
+    # by the time this hook runs the destination is either app-configured
+    # (:backend / env["rack.backend"]) or the deployment has explicitly passed
+    # allow_dynamic_backend: true — override it to pin an allowlist on top:
+    #
+    #   def backend_allowed?(backend)
+    #     %w[api.internal.example.com].include?(backend.host)
+    #   end
     def backend_allowed?(backend)
       true
     end
@@ -224,7 +234,19 @@ module Rack
         # Use basic auth if we have to
         target_request.basic_auth(@username, @password) if @username && @password
 
-        backend = env.delete("rack.backend") || @backend || source_request
+        backend = env.delete("rack.backend") || @backend
+        if backend.nil?
+          # Dynamic mode: the destination would come from the client-controlled
+          # Host header. Refused unless the deployment opted in (SSRF guard).
+          unless @allow_dynamic_backend
+            if @logger.respond_to?(:<<)
+              @logger << "rack-proxy: refusing Host-derived backend #{source_request.host.inspect} " \
+                         "(no :backend configured; pass allow_dynamic_backend: true to opt in)\n"
+            end
+            return [502, {}, []]
+          end
+          backend = source_request
+        end
         return [502, {}, []] unless backend_allowed?(backend)
 
         use_ssl = backend.scheme == "https" || @cert

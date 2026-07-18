@@ -50,7 +50,8 @@ Options
 Options can be set when initializing the middleware or overriding a method.
 
 * `:streaming` - stream the backend response as it arrives (default `true`). Set to `false` to buffer the whole response before returning it (also recommended under `webmock`/`vcr` — see [Compatibility notes](#compatibility-notes)).
-* `:backend` - URI (or URI-parseable string) of the backend host/port/scheme to proxy to. If not set, the destination is derived from the incoming request's `Host` — see [Security considerations](#security-considerations).
+* `:backend` - URI (or URI-parseable string) of the backend host/port/scheme to proxy to. If not set, the destination is derived from the incoming request's `Host` — which is **refused by default** since 1.0; see `:allow_dynamic_backend` and [Security considerations](#security-considerations).
+* `:allow_dynamic_backend` - opt in (`true`) to deriving the destination from the client-supplied `Host` header when no `:backend` is configured. Off by default (such requests get `502`), because a bare dynamic proxy is an open proxy. Combine with a `backend_allowed?` allowlist.
 * `:read_timeout` - per-read timeout in seconds (default `60`).
 * `:open_timeout` - connection-open timeout in seconds.
 * `:write_timeout` - per-write timeout in seconds.
@@ -83,7 +84,7 @@ Security considerations
 
 rack-proxy forwards attacker-influenced requests to a backend and relays the backend's response. Configure and subclass it with that in mind.
 
-* **SSRF / open proxy.** If you do **not** set `:backend`, the destination host/port/scheme is derived from the incoming request's `Host` / `X-Forwarded-Host` header. A bare `Rack::Proxy.new` will therefore proxy to *any* host a client names — including cloud metadata endpoints (`169.254.169.254`), loopback, and private ranges. Either set a fixed `:backend`, or override `backend_allowed?(backend)` to allowlist expected hosts:
+* **SSRF / open proxy — safe by default since 1.0.** If you do **not** set `:backend`, the destination host/port/scheme would be derived from the incoming request's `Host` / `X-Forwarded-Host` header — meaning a client could steer the proxy at *any* host, including cloud metadata endpoints (`169.254.169.254`), loopback, and private ranges. Such requests are now refused with `502` unless you pass `allow_dynamic_backend: true`. When you do opt in, pin an allowlist on top by overriding `backend_allowed?(backend)` (consulted for every request, static backends included):
 
     ```ruby
     class MyProxy < Rack::Proxy
@@ -93,9 +94,11 @@ rack-proxy forwards attacker-influenced requests to a backend and relays the bac
         ALLOWED.include?(backend.host)
       end
     end
+
+    MyProxy.new(allow_dynamic_backend: true)
     ```
 
-    A refused backend is answered with `502`. (Making dynamic, `Host`-derived backends opt-in by default is planned for a future major version.)
+    A refused backend is answered with `502` (with a hint in the `:logger` output).
 
 * **Credential forwarding.** All incoming `HTTP_*` headers are forwarded, including `Authorization` and `Cookie`. Don't proxy to a different trust domain with credentials attached — pass `strip_credentials: true` to drop both (or do finer-grained filtering in `rewrite_env`). Over an `http://` backend these travel in cleartext.
 
