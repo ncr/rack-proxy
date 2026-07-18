@@ -2,7 +2,6 @@ require "test_helper"
 require "rack/http_streaming_response"
 
 class HttpStreamingResponseTest < Test::Unit::TestCase
-
   def setup
     @server, port = ProxyTestServer.start_server(ssl: false)
     req = Net::HTTP::Get.new("/")
@@ -37,7 +36,6 @@ class HttpStreamingResponseTest < Test::Unit::TestCase
     chunks.each do |chunk|
       assert chunk.is_a?(String)
     end
-
   end
 
   def test_to_s
@@ -274,5 +272,4 @@ class HttpStreamingResponseTest < Test::Unit::TestCase
   ensure
     thread&.join(2)
   end
-
 end

@@ -6,18 +6,17 @@ require "rack/http_streaming_response"
 require "rack/proxy/version"
 
 module Rack
-
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
     HOP_BY_HOP_HEADERS = {
-      'connection' => true,
-      'keep-alive' => true,
-      'proxy-authenticate' => true,
-      'proxy-authorization' => true,
-      'te' => true,
-      'trailer' => true,
-      'transfer-encoding' => true,
-      'upgrade' => true
+      "connection" => true,
+      "keep-alive" => true,
+      "proxy-authenticate" => true,
+      "proxy-authorization" => true,
+      "te" => true,
+      "trailer" => true,
+      "transfer-encoding" => true,
+      "upgrade" => true
     }.freeze
 
     # Backend/network failures that must surface as 502 Bad Gateway rather than
@@ -41,7 +40,7 @@ module Rack
     class << self
       def extract_http_request_headers(env)
         headers = env.reject do |k, v|
-          !(/^HTTP_[A-Z0-9_\.]+$/ === k) || v.nil?
+          !(/^HTTP_[A-Z0-9_.]+$/ === k) || v.nil?
         end.map do |k, v|
           [reconstruct_header_name(k), v]
         end.then { |pairs| build_header_hash(pairs) }
@@ -52,21 +51,21 @@ module Rack
         # Per RFC 7230 §6.1 any field named in the inbound Connection header is
         # itself hop-by-hop for this hop. Use #delete (not #reject!) so the
         # returned HeaderHash's case-insensitive index stays consistent on Rack 2.
-        connection_named = headers['Connection'].to_s.downcase.split(/,\s*/).map(&:strip)
+        connection_named = headers["Connection"].to_s.downcase.split(/,\s*/).map(&:strip)
         headers.keys.each do |key|
           headers.delete(key) if HOP_BY_HOP_HEADERS[key.downcase] || connection_named.include?(key.downcase)
         end
 
-        x_forwarded_for = (headers['X-Forwarded-For'].to_s.split(/, +/) << env['REMOTE_ADDR']).join(', ')
+        x_forwarded_for = (headers["X-Forwarded-For"].to_s.split(/, +/) << env["REMOTE_ADDR"]).join(", ")
 
-        headers.merge!('X-Forwarded-For' => x_forwarded_for)
+        headers.merge!("X-Forwarded-For" => x_forwarded_for)
       end
 
       def normalize_headers(headers)
         mapped = headers.map do |k, v|
-          [titleize(k), if v.is_a? Array then v.join("\n") else v end]
+          [titleize(k), v.is_a?(Array) ? v.join("\n") : v]
         end
-        build_header_hash Hash[mapped]
+        build_header_hash mapped.to_h
       end
 
       def build_header_hash(pairs)
@@ -84,7 +83,7 @@ module Rack
       protected
 
       def reconstruct_header_name(name)
-        titleize(name.sub(/^HTTP_/, "").gsub("_", "-"))
+        titleize(name.sub(/^HTTP_/, "").tr("_", "-"))
       end
 
       def titleize(str)
@@ -93,7 +92,7 @@ module Rack
     end
 
     # @option opts [String, URI::HTTP] :backend Backend host to proxy requests to
-    def initialize(app = nil, opts= {})
+    def initialize(app = nil, opts = {})
       if app.is_a?(Hash)
         opts = app
         @app = nil
@@ -182,10 +181,10 @@ module Rack
       #   400 malformed request URI, 501 unknown method, 502 backend failure.
       begin
         # Initialize request
-        if source_request.fullpath == ""
-          full_path = URI.parse(env['REQUEST_URI']).request_uri
+        full_path = if source_request.fullpath == ""
+          URI.parse(env["REQUEST_URI"]).request_uri
         else
-          full_path = source_request.fullpath
+          source_request.fullpath
         end
 
         request_class = net_http_request_class(source_request.request_method)
@@ -196,14 +195,14 @@ module Rack
         # Setup headers
         request_headers = self.class.extract_http_request_headers(source_request.env)
         if @strip_credentials
-          request_headers.delete('Cookie')
-          request_headers.delete('Authorization')
+          request_headers.delete("Cookie")
+          request_headers.delete("Authorization")
         end
         if @replace_x_forwarded_for
-          if (remote_addr = env['REMOTE_ADDR'])
-            request_headers['X-Forwarded-For'] = remote_addr
+          if (remote_addr = env["REMOTE_ADDR"])
+            request_headers["X-Forwarded-For"] = remote_addr
           else
-            request_headers.delete('X-Forwarded-For')
+            request_headers.delete("X-Forwarded-For")
           end
         end
         target_request.initialize_http_header(request_headers)
@@ -216,20 +215,20 @@ module Rack
 
         # Setup body
         if target_request.request_body_permitted? && source_request.body
-          target_request.body_stream    = source_request.body
+          target_request.body_stream = source_request.body
           target_request.content_length = source_request.content_length.to_i
-          target_request.content_type   = source_request.content_type if source_request.content_type
+          target_request.content_type = source_request.content_type if source_request.content_type
           target_request.body_stream.rewind if target_request.body_stream.respond_to?(:rewind)
         end
 
         # Use basic auth if we have to
         target_request.basic_auth(@username, @password) if @username && @password
 
-        backend = env.delete('rack.backend') || @backend || source_request
+        backend = env.delete("rack.backend") || @backend || source_request
         return [502, {}, []] unless backend_allowed?(backend)
 
         use_ssl = backend.scheme == "https" || @cert
-        read_timeout = env.delete('http.read_timeout') || @read_timeout
+        read_timeout = env.delete("http.read_timeout") || @read_timeout
 
         if @streaming
           # streaming response (the actual network communication is deferred, a.k.a. streamed)
@@ -246,10 +245,10 @@ module Rack
           end
         end
 
-        code    = target_response.code
+        code = target_response.code
         headers = self.class.normalize_headers(target_response.respond_to?(:headers) ? target_response.headers : target_response.to_hash)
-        body    = target_response.body || []
-        body    = [body] unless body.respond_to?(:each)
+        body = target_response.body || []
+        body = [body] unless body.respond_to?(:each)
       rescue URI::InvalidURIError
         return [400, {}, []]
       rescue *BACKEND_ERRORS => e
@@ -281,7 +280,7 @@ module Rack
     def response_too_large?(target_response, headers, body)
       return false unless @max_response_length
 
-      declared = headers['Content-Length']
+      declared = headers["Content-Length"]
       declared_oversize = declared && declared.to_i > @max_response_length
 
       if target_response.respond_to?(:max_response_length=)

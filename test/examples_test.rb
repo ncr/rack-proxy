@@ -8,9 +8,9 @@ require "rack/proxy"
 # trailing Rails-guard has to stay correct.
 class ExamplesTest < Test::Unit::TestCase
   EXAMPLES = {
-    "forward_host"          => "ForwardHost",
-    "rack_php_proxy"        => "RackPhpProxy",
-    "trusting_proxy"        => "TrustingProxy",
+    "forward_host" => "ForwardHost",
+    "rack_php_proxy" => "RackPhpProxy",
+    "trusting_proxy" => "TrustingProxy",
     "example_service_proxy" => "ExampleServiceProxy"
   }.freeze
 

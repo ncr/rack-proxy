@@ -96,7 +96,7 @@ module Rack
         end
         block.call(chunk)
       end
-    rescue StandardError => e
+    rescue => e
       # The status/headers are already on the wire, so we can't turn a mid-stream
       # backend failure into a 502. Log it and re-raise so the server aborts the
       # transfer (the client sees a truncated response, not a false "complete").
@@ -186,7 +186,7 @@ module Rack
       if @fiber&.alive?
         begin
           @fiber.raise(StreamAborted, "backend stream closed before the response was fully read")
-        rescue StandardError
+        rescue
           # Expected: StreamAborted itself (or whatever the unwind trips over)
           # propagates back out of Fiber#raise; FiberError if another thread
           # owns the Fiber. Either way we fall through to closing the socket.
@@ -195,7 +195,7 @@ module Rack
 
       begin
         @session.finish if @session&.started?
-      rescue StandardError
+      rescue
         # best-effort: the connection may already be gone
       end
     end
