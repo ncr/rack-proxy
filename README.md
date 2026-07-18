@@ -172,8 +172,11 @@ class TrustingProxy < Rack::Proxy
   end
 end
 
-# Pass ssl_verify_none: true to skip TLS certificate verification.
-Rack::Proxy.new(ssl_verify_none: true)
+# Mount it with an explicit backend (dynamic Host-derived backends are refused
+# by default since 1.0). Pass ssl_verify_none: true to skip TLS verification.
+Rails.application.config.middleware.use TrustingProxy,
+  backend: "https://self-signed.badssl.com",
+  ssl_verify_none: true
 ```
 
 ### Rails middleware example
@@ -269,14 +272,14 @@ To use the middleware, please consider the following:
 1) For Rails we could add a configuration in `config/application.rb`
 
 ```ruby
-  config.middleware.use RackPhpProxy, {ssl_verify_none: true}
+  config.middleware.use RackPhpProxy, backend: "http://php.net", ssl_verify_none: true
 ```
 
 2) For Sinatra or any Rack-based application:
 
 ```ruby
 class MyAwesomeSinatra < Sinatra::Base
-   use  RackPhpProxy, {ssl_verify_none: true}
+   use RackPhpProxy, backend: "http://php.net", ssl_verify_none: true
 end
 ```
 
@@ -362,7 +365,7 @@ key_raw = File.read('./certs/key.pem')
 cert = OpenSSL::X509::Certificate.new(cert_raw)
 key = OpenSSL::PKey.read(key_raw)
 
-use TLSProxy, cert: cert, key: key, verify_mode: OpenSSL::SSL::VERIFY_PEER, min_version: :TLS1_2
+use TLSProxy, backend: "https://client-tls-auth-api.com", cert: cert, key: key, verify_mode: OpenSSL::SSL::VERIFY_PEER, min_version: :TLS1_2
 ```
 
 And rewrite host for example:

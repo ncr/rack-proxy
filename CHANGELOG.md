@@ -164,7 +164,8 @@ or a compatible fix. See the README's "Upgrading" section for migration steps.
 
 Older releases (≤ 0.7.8) predate this changelog; see the git history and tags.
 
-[Unreleased]: https://github.com/ncr/rack-proxy/compare/v0.8.3...HEAD
+[Unreleased]: https://github.com/ncr/rack-proxy/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/ncr/rack-proxy/compare/v0.8.3...v1.0.0
 [0.8.3]: https://github.com/ncr/rack-proxy/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/ncr/rack-proxy/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/ncr/rack-proxy/compare/v0.8.0...v0.8.1

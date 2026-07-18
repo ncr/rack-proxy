@@ -42,16 +42,18 @@
 >
 > ## Continuation / handoff (read this if resuming on another machine)
 >
-> Six branches are **stacked**, each its own PR — merge in order:
+> Seven branches are **stacked**, each its own PR — merge in order:
 > `batch-1-green-loop` → `batch-2-security` → `batch-3-tls-timeouts` →
-> `batch-4-docs-supply-chain` → `batch-5-fiber-streaming` → `batch-6-lint-polish`.
-> `master` is untouched. Run tests with `bundle exec rake test` (offline, ~2-3s);
-> CI covers Ruby 3.1–3.4 × Rack 2/3 plus a lint/audit/coverage job. See
-> [`CLAUDE.md`](CLAUDE.md) for invariants/traps.
+> `batch-4-docs-supply-chain` → `batch-5-fiber-streaming` → `batch-6-lint-polish`
+> → `batch-7-v1`. `master` is untouched. Run tests with `bundle exec rake test`
+> (offline, ~2-3s); CI covers Ruby 3.1–3.4 × Rack 2/3 plus a lint/audit/coverage
+> job. See [`CLAUDE.md`](CLAUDE.md) for invariants/traps.
 >
-> **Decisions locked in:** (1) the P0-4 SSRF `backend_allowed?` default stays
-> allow-all until a **major** version bump; (2) `net_http_hacked.rb` stays as a
-> deprecated functional shim for exactly one release, then gets deleted.
+> **Decisions (executed in the 1.0.0 major, batch-7-v1):** (1) the P0-4 SSRF
+> default flipped — Host-derived backends are now refused unless
+> `allow_dynamic_backend: true`; (2) `net_http_hacked.rb` was deleted (it never
+> shipped as a runtime-warning shim in a release — the deprecation lived only on
+> the unreleased batch-5 branch and was folded into the 1.0 deletion).
 >
 > **Still open (manual, maintainer-only):**
 > - Merge the seven stacked PRs in order, then push the `v1.0.0` tag.

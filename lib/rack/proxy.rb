@@ -247,7 +247,12 @@ module Rack
           end
           backend = source_request
         end
-        return [502, {}, []] unless backend_allowed?(backend)
+        unless backend_allowed?(backend)
+          if @logger.respond_to?(:<<)
+            @logger << "rack-proxy: backend #{backend.host.inspect} refused by backend_allowed?\n"
+          end
+          return [502, {}, []]
+        end
 
         use_ssl = backend.scheme == "https" || @cert
         read_timeout = env.delete("http.read_timeout") || @read_timeout

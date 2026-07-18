@@ -26,7 +26,7 @@ The default suite must never touch the network. CI (`.github/workflows/ci.yml`)
 runs the matrix Ruby 3.1–3.4 × Rack 2/3, a `ruby head` canary, a gem-build
 smoke test, and a blocking lint job (standardrb + coverage floor + bundler-audit).
 
-## Architecture (two core files + a deprecated shim, ~500 lines)
+## Architecture (two core files, ~460 lines)
 
 - **`lib/rack/proxy.rb`** — `Rack::Proxy`. The entry point: `call` →
   `rewrite_env` → `perform_request` → `rewrite_response`. `perform_request`

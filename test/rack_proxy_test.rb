@@ -677,13 +677,16 @@ class RackProxyTest < Test::Unit::TestCase
   end
 
   # backend_allowed? must be consulted for static backends too, not just
-  # dynamic ones — it is the fine-grained allowlist on top of the mode gate.
+  # dynamic ones — it is the fine-grained allowlist on top of the mode gate —
+  # and the refusal should log a hint for operators debugging the 502.
   def test_backend_allowed_consulted_for_static_backend
     server, port = ProxyTestServer.start_server
-    proxy = Rack::Proxy.new(backend: "http://127.0.0.1:#{port}")
+    sink = StringIO.new
+    proxy = Rack::Proxy.new(backend: "http://127.0.0.1:#{port}", logger: sink)
     def proxy.backend_allowed?(_backend) = false
     status, _headers, _body = proxy.call(Rack::MockRequest.env_for("/"))
     assert_equal 502, status
+    assert_match(/refused by backend_allowed\?/, sink.string)
   ensure
     server&.shutdown
   end
