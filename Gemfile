@@ -10,4 +10,6 @@ gemspec
 # uses this Gemfile; SimpleCov only loads when COVERAGE=1 is set.
 group :development do
   gem 'simplecov', require: false
+  gem 'standard', require: false
+  gem 'bundler-audit', require: false
 end

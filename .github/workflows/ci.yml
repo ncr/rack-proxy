@@ -39,6 +39,23 @@ jobs:
           bundler-cache: true
       - run: bundle exec rake test
 
+  # Style + dependency audit + coverage floor (uses the default Gemfile, the
+  # only one that carries the dev tooling).
+  lint:
+    name: lint, audit & coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - run: bundle exec standardrb
+      - run: bundle exec bundler-audit check --update
+      - run: bundle exec rake test
+        env:
+          COVERAGE: "1"
+
   # Verify the gem packages and installs with the files the gemspec declares.
   build:
     name: gem build
