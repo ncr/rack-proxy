@@ -676,6 +676,20 @@ class RackProxyTest < Test::Unit::TestCase
     server&.shutdown
   end
 
+  # A URI-parseable String rack.backend is accepted too (symmetric with the
+  # :backend option) rather than crashing on #scheme with an uncaught 500.
+  def test_rack_backend_env_accepts_string
+    server, port = ProxyTestServer.start_server
+    proxy = Rack::Proxy.new
+    env = Rack::MockRequest.env_for("/")
+    env["rack.backend"] = "http://127.0.0.1:#{port}"
+    status = nil
+    assert_nothing_raised { status, = proxy.call(env) }
+    assert_equal 200, status.to_i
+  ensure
+    server&.shutdown
+  end
+
   # backend_allowed? must be consulted for static backends too, not just
   # dynamic ones — it is the fine-grained allowlist on top of the mode gate —
   # and the refusal should log a hint for operators debugging the 502.

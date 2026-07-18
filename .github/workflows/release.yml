@@ -4,8 +4,10 @@
 # ONE-TIME SETUP required before the first release:
 #   1. On rubygems.org: gem page -> Ownership -> Trusted publishers -> add
 #      GitHub repo ncr/rack-proxy, workflow release.yml, environment `release`.
-#   2. On GitHub: Settings -> Environments -> create `release` (optionally
-#      require reviewers), so a pushed tag can't publish without the gate.
+#   2. On GitHub: Settings -> Environments -> create `release`. Add protection
+#      rules (required reviewers and/or a tag deployment-branch filter) if you
+#      want a human gate before publish — a bare environment enforces nothing
+#      on its own; it only binds this job to the rubygems trusted-publisher.
 #   3. Revoke any long-lived rubygems push key previously used by `rake release`.
 name: Release
 
@@ -19,7 +21,7 @@ jobs:
     environment: release
     permissions:
       id-token: write # OIDC token for rubygems.org Trusted Publishing
-      contents: write # allow the action to create the GitHub release
+      contents: write # let `rake release` push the v* tag if it isn't already present
     steps:
       - uses: actions/checkout@v4
       - uses: ruby/setup-ruby@v1

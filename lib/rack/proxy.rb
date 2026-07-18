@@ -235,6 +235,10 @@ module Rack
         target_request.basic_auth(@username, @password) if @username && @password
 
         backend = env.delete("rack.backend") || @backend
+        # env["rack.backend"] is documented as a URI, but accept a URI-parseable
+        # string too (symmetric with the :backend option) rather than crash on
+        # #scheme later; a malformed string surfaces as 400 via the rescue.
+        backend = URI(backend) if backend.is_a?(String)
         if backend.nil?
           # Dynamic mode: the destination would come from the client-controlled
           # Host header. Refused unless the deployment opted in (SSRF guard).
