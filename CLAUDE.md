@@ -31,7 +31,8 @@ smoke test.
   extracts/forwards request headers, picks the backend, and has **two distinct
   network paths** that must stay behaviorally identical: streaming (default) and
   non-streaming (`streaming: false`). Subclasses override `rewrite_env` /
-  `rewrite_response` (and sometimes `perform_request`); see `lib/rack_proxy_examples/`.
+  `rewrite_response` (and sometimes `perform_request`); see `examples/`
+  (copy-paste snippets, not shipped in the gem).
 - **`lib/rack/http_streaming_response.rb`** — `HttpStreamingResponse`, the lazy
   Rack body used by the streaming path. It runs the public block form of
   `Net::HTTP#request` inside a **Fiber**: the Fiber pauses once the status and

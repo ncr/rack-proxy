@@ -112,17 +112,14 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 Examples
 ----
 
-See and run the examples below from `lib/rack_proxy_examples/`. To mount any example into an existing Rails app:
+The snippets below (also in [`examples/`](examples/) in the repository) are meant to be **copied into your app** — e.g. into `app/middleware/` or `lib/` — and adapted. They are not shipped in the gem and cannot be `require`d from it. To mount one in Rails, copy the class into your app and add it to the middleware stack in an initializer:
 
-1. create `config/initializers/proxy.rb`
-2. modify the file to require the example file
 ```ruby
-require 'rack_proxy_examples/forward_host'
+# config/initializers/proxy.rb
+Rails.application.config.middleware.use ForwardHost, backend: "http://example.com"
 ```
 
 ### Forward request to Host and Insert Header
-
-Test with `require 'rack_proxy_examples/forward_host'`
 
 ```ruby
 class ForwardHost < Rack::Proxy
@@ -151,7 +148,7 @@ end
 
 ### Disable SSL session verification when proxying a server with e.g. self-signed SSL certs
 
-Test with `require 'rack_proxy_examples/trusting_proxy'`
+From [`examples/trusting_proxy.rb`](examples/trusting_proxy.rb):
 
 ```ruby
 class TrustingProxy < Rack::Proxy
@@ -180,7 +177,7 @@ Rack::Proxy.new(ssl_verify_none: true)
 
 ### Rails middleware example
 
-Test with `require 'rack_proxy_examples/example_service_proxy'`
+From [`examples/example_service_proxy.rb`](examples/example_service_proxy.rb):
 
 ```ruby
 ###
@@ -192,7 +189,7 @@ Test with `require 'rack_proxy_examples/example_service_proxy'`
 # 3. install Rack-Proxy in `Gemfile`
 #    a. `gem 'rack-proxy', '~> 0.8.0'`
 # 4. install gem: `bundle install`
-# 5. create `config/initializers/proxy.rb` adding this line `require 'rack_proxy_examples/example_service_proxy'`
+# 5. copy the class into your app and mount it from `config/initializers/proxy.rb`
 # 6. run: `SERVICE_URL=http://guides.rubyonrails.org rails server`
 # 7. open in browser: `http://localhost:3000/example_service`
 #
@@ -225,7 +222,7 @@ end
 
 ### Using as middleware to forward only some extensions to another Application
 
-Test with `require 'rack_proxy_examples/rack_php_proxy'`
+From [`examples/rack_php_proxy.rb`](examples/rack_php_proxy.rb):
 
 Example: Proxying only requests that end with ".php" could be done like this:
 

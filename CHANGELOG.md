@@ -74,6 +74,14 @@ This entry collects the 2026 modernization + security-hardening work (see
   library. The file remains as a functional shim that warns on require, and
   will be removed in a future release.
 
+### Removed
+
+- The bundled examples moved from the gem load path
+  (`lib/rack_proxy_examples/`) to [`examples/`](examples/) in the repository.
+  `require "rack_proxy_examples/..."` no longer works — copy the example class
+  into your app instead (they were never safe to require blindly: each one
+  installs itself into the Rails middleware stack when Rails is booted).
+
 ## [0.8.3] - 2025
 
 ### Fixed
