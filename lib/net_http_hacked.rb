@@ -1,22 +1,24 @@
 # frozen_string_literal: true
 
-# We are hacking net/http to change semantics of streaming handling
-# from "block" semantics to regular "return" semantics.
-# We need it to construct a streamable rack triplet:
+# DEPRECATED SHIM — scheduled for removal.
 #
-# [status, headers, streamable_body]
+# rack-proxy no longer uses this monkey-patch: Rack::HttpStreamingResponse now
+# streams through the public block form of Net::HTTP#request, run inside a
+# Fiber (see lib/rack/http_streaming_response.rb). This file is kept for one
+# release only, in case external code requires it directly and calls
+# #begin_request_hacked / #end_request_hacked. It reaches into private
+# net/http internals and can break on any Ruby upgrade — migrate off it.
 #
-# See http://github.com/zerowidth/rack-streaming-proxy
-# for alternative that uses additional process.
-#
-# BTW I don't like monkey patching either
-# but this is not real monkey patching.
-# I just added some methods and named them very uniquely
-# to avoid eventual conflicts. You're safe. Trust me.
-#
-# Also, in Ruby 1.9.2 you could use Fibers to avoid hacking net/http.
+# Historical context: the patch turned net/http's block-style streaming into
+# return-style so the response could become a Rack body. See
+# http://github.com/zerowidth/rack-streaming-proxy for an alternative that
+# used an additional process.
 
 require 'net/https'
+
+warn "[DEPRECATION] rack-proxy's net_http_hacked is deprecated and no longer used by " \
+     "Rack::Proxy (streaming now uses the public Net::HTTP API). It will be removed in " \
+     "a future release; stop requiring 'net_http_hacked'.", uplevel: 0
 
 class Net::HTTP
   # Original #request with block semantics.
@@ -94,15 +96,16 @@ class Net::HTTPResponse
   end
 end
 
-# Fail loudly (a warning, so non-streaming users are unaffected) if a future
-# net/http drops the private internals this patch reaches into, instead of
-# breaking mysteriously at request time. The planned Fiber-based rewrite (see
-# MODERNIZATION_PLAN.md P1-5) removes this dependency entirely.
+# Fail loudly (a warning) if this Ruby's net/http has dropped the private
+# internals the shim reaches into, instead of breaking mysteriously at call
+# time. Rack::Proxy itself is unaffected either way — its streaming uses the
+# public Net::HTTP API (lib/rack/http_streaming_response.rb).
 _rack_proxy_missing_net_http = %i[begin_transport end_transport edit_path].reject do |m|
   Net::HTTP.private_method_defined?(m) || Net::HTTP.method_defined?(m)
 end
 _rack_proxy_missing_net_http << :read_new unless Net::HTTPResponse.respond_to?(:read_new, true)
 unless _rack_proxy_missing_net_http.empty?
   warn "net_http_hacked: Net::HTTP internals #{_rack_proxy_missing_net_http.join(', ')} are " \
-       "missing on Ruby #{RUBY_VERSION}; Rack::Proxy streaming may be broken. Use streaming: false."
+       "missing on Ruby #{RUBY_VERSION}; this deprecated shim is broken here. Migrate to " \
+       "Rack::Proxy's built-in streaming, which does not use these internals."
 end

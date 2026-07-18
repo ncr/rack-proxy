@@ -38,10 +38,22 @@ This entry collects the 2026 modernization + security-hardening work (see
 
 ### Changed
 
+- **The streaming path no longer monkey-patches `net/http`.**
+  `Rack::HttpStreamingResponse` now runs the public block form of
+  `Net::HTTP#request` inside a Fiber (pausing at the response head, resuming
+  per body chunk), replacing the 2010-era patch of private `net/http` internals
+  in `net_http_hacked.rb`. Behavioral notes: the streaming session sets
+  `max_retries = 0` so a transport error can never silently replay the request
+  mid-stream; early termination (client abort, HEAD, 204/304) now closes
+  the backend connection immediately instead of draining the remaining body;
+  and a body-less POST/PUT/PATCH on the streaming path now carries
+  `Content-Length: 0` (matching the non-streaming path and plain `Net::HTTP` —
+  the old patched path sent no `Content-Length` at all).
 - Backend and construction failures now map to status codes instead of raising a
   `500`: `400` (malformed request URI), `501` (unknown HTTP method), `502`
   (broadened backend-error set incl. `ECONNRESET`, `EPIPE`, read/write timeouts,
-  `EOFError`, `OpenSSL::SSL::SSLError`, protocol errors).
+  `EOFError`, `OpenSSL::SSL::SSLError`, protocol errors, and malformed backend
+  responses — `Net::HTTPBadResponse` / `Net::HTTPHeaderSyntaxError`).
 - gzip-encoded backend responses are forwarded verbatim (Content-Encoding and
   Content-Length preserved) instead of being transparently inflated.
 - Skip all `1xx` interim responses (including `103 Early Hints`) on the streaming
@@ -54,6 +66,9 @@ This entry collects the 2026 modernization + security-hardening work (see
 ### Deprecated
 
 - `:ssl_version` — use `:min_version` / `:max_version`.
+- `require "net_http_hacked"` — the monkey-patch is no longer used by the
+  library. The file remains as a functional shim that warns on require, and
+  will be removed in a future release.
 
 ## [0.8.3] - 2025
 

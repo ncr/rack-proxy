@@ -43,9 +43,9 @@ class RackProxyTest < Test::Unit::TestCase
 
   # The offline HTTPS tests proxy over TLS to a self-signed local server with
   # verification disabled, exercising the streaming/non-streaming TLS transport
-  # and the :ssl_version plumbing. The VERIFY_PEER *success* path (a trusted
-  # cert accepted by default) is covered by test/live_smoke_test.rb until the
-  # planned :ca_file option lands, at which point it becomes hermetic too.
+  # and the :ssl_version plumbing. The VERIFY_PEER *success* path is covered
+  # hermetically by test_https_ca_file_accepts_trusted_cert_* below (via
+  # :ca_file); test/live_smoke_test.rb only adds system-trust-store coverage.
   def test_https_streaming
     with_webrick_proxy(ssl: true, ssl_verify_none: true) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
@@ -245,6 +245,65 @@ class RackProxyTest < Test::Unit::TestCase
       get '/not-modified'
       assert_equal 304, last_response.status
       assert_equal '', last_response.body
+    end
+  end
+
+  # Same guards on the default (streaming) path: the streaming body must close
+  # the backend connection for these statuses without emitting an entity body
+  # (P1-5 exercises this through the Fiber-based streamer).
+  def test_no_entity_body_for_204_streaming
+    with_webrick_proxy(streaming: true) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get '/no-content'
+      assert_equal 204, last_response.status
+      assert_equal '', last_response.body
+    end
+  end
+
+  def test_no_entity_body_for_304_streaming
+    with_webrick_proxy(streaming: true) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get '/not-modified'
+      assert_equal 304, last_response.status
+      assert_equal '', last_response.body
+    end
+  end
+
+  def test_head_request_streaming
+    with_webrick_proxy(streaming: true) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      head '/'
+      assert last_response.ok?
+      assert_equal '', last_response.body, 'HEAD must not stream an entity body'
+    end
+  end
+
+  # A request body must round-trip through the default (streaming) path too —
+  # the non-streaming POST coverage alone would let a fiber-path body bug slip.
+  def test_post_body_is_forwarded_streaming
+    with_webrick_proxy(streaming: true) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      post '/echo-body', 'hello=streaming-world'
+      assert last_response.ok?
+      assert_equal 'hello=streaming-world', last_response.body
+    end
+  end
+
+  # A backend replying with a malformed status line must become a 502, not a
+  # raised Net::HTTPBadResponse (which subclasses StandardError directly, NOT
+  # Net::ProtocolError — easy to get wrong in BACKEND_ERRORS).
+  def test_malformed_backend_response_returns_502
+    [true, false].each do |streaming|
+      with_malformed_backend do |port|
+        proxy = HostProxy.new(streaming: streaming)
+        @app = proxy
+        proxy.host = "127.0.0.1:#{port}"
+        get "/"
+        assert_equal 502, last_response.status,
+          "malformed backend response must 502 (streaming: #{streaming})"
+      ensure
+        @app = nil
+      end
     end
   end
 
@@ -559,6 +618,26 @@ class RackProxyTest < Test::Unit::TestCase
           'Content-Length must match the (compressed) bytes actually forwarded'
       end
     end
+  end
+
+  # A raw TCP backend that replies with a malformed status line (a hostile or
+  # broken backend), to prove the parse failure maps to 502 instead of raising.
+  def with_malformed_backend
+    server = TCPServer.new("127.0.0.1", 0)
+    port = server.addr[1]
+    thread = Thread.new do
+      client = server.accept
+      client.gets("\r\n\r\n") # consume request headers
+      client.write("garbage nonsense\r\n\r\n")
+      client.close
+    rescue IOError, Errno::EPIPE, Errno::ECONNRESET
+      # client went away; nothing to do
+    ensure
+      server.close
+    end
+    yield port
+  ensure
+    thread&.join(2)
   end
 
   # A raw TCP backend that emits a 103 Early Hints interim response followed by a

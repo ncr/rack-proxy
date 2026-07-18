@@ -34,11 +34,13 @@ BUNDLE_GEMFILE=gemfiles/rack_2.gemfile bundle exec rake test
   `test/support/proxy_test_server.rb`). Do not add live-host tests; put anything
   that genuinely needs the internet behind `ENV["LIVE"]` in
   `test/live_smoke_test.rb`.
-- **Do not add `webmock` or `vcr`** — they monkey-patch `net/http` and break the
-  streaming code path.
-- **Do not casually refactor `lib/net_http_hacked.rb`.** It depends on private
-  `Net::HTTP` internals; changes there can silently break streaming. The planned
-  replacement is a deliberate Fiber-based rewrite (see `MODERNIZATION_PLAN.md`).
+- **Do not add `webmock` or `vcr`** — tests must exercise real `Net::HTTP`
+  traffic; request-stubbing layers would make the streaming tests meaningless.
+- **Do not "simplify" the Fiber plumbing in `HttpStreamingResponse`.** The
+  `max_retries = 0`, the `StreamAborted` unwind class, and the forced
+  `decode_content = false` are load-bearing (see the trap list in
+  [`CLAUDE.md`](CLAUDE.md)). `lib/net_http_hacked.rb` is a deprecated shim
+  scheduled for removal — don't build on it.
 - **Keep the test framework as `test-unit`.**
 - New behavior needs a regression test; bug fixes should add a test that fails
   before the fix.

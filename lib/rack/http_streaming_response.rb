@@ -1,14 +1,37 @@
 # frozen_string_literal: true
 
-require "net_http_hacked"
+require "net/https"
 require "stringio"
 
 module Rack
-  # Wraps the hacked net/http in a Rack way.
+  # A lazy Rack body that streams a backend Net::HTTP response without
+  # buffering it.
+  #
+  # The request runs inside a Fiber, using only the public block form of
+  # Net::HTTP#request: the Fiber pauses (`Fiber.yield res`) the moment the
+  # status and headers are available, and #each resumes it to pull body chunks
+  # as the server consumes them. This replaces the historical monkey-patch of
+  # private net/http internals (`net_http_hacked.rb`, now a deprecated shim)
+  # and inherits upstream's handling of 1xx interim responses, keep-alive
+  # negotiation, and transport errors.
+  #
+  # A Fiber can only be resumed from the thread that created it. The request
+  # Fiber is created lazily on first use (#code/#headers/#each), so the normal
+  # Rack flow — one thread calls the app and then iterates the body — is fine.
+  # If #close is called from a different thread (some servers do this on client
+  # abort), the Fiber unwind is skipped and the connection is hard-closed
+  # instead, which releases the socket either way.
   class HttpStreamingResponse
     # Raised while streaming when the backend body exceeds max_response_length.
     # The status/headers are already sent, so the transfer is aborted mid-stream.
     class ResponseTooLarge < StandardError; end
+
+    # Raised INTO the request Fiber to unwind it on early termination (client
+    # abort, HEAD, 204/304, oversize response). Deliberately a direct
+    # StandardError subclass — it must never match the network-error classes
+    # Net::HTTP#request retries on, or aborting a stream could replay the
+    # request against the backend.
+    class StreamAborted < StandardError; end
 
     STATUSES_WITH_NO_ENTITY_BODY = {
       204 => true,
@@ -26,6 +49,15 @@ module Rack
     # direct users of this class).
     def initialize(request, host, port = nil, &configure)
       @request, @host, @port, @configure = request, host, port, configure
+
+      # Forward the backend body verbatim. Without this, Net::HTTP inflates
+      # gzip/deflate bodies for requests that opted in (the default for e.g.
+      # Net::HTTP::Get), leaving the already-forwarded Content-Length and
+      # Content-Encoding describing bytes the client never receives. The old
+      # patched read path never decoded; keep that contract.
+      if request.instance_variable_defined?(:@decode_content)
+        request.instance_variable_set(:@decode_content, false)
+      end
     end
 
     def body
@@ -48,8 +80,14 @@ module Rack
     def each(&block)
       return if connection_closed
 
+      response # make sure the request has started and the headers are in
+
       bytes = 0
-      response.read_body do |chunk|
+      while @fiber.alive?
+        chunk = @fiber.resume
+        # The last resume returns the Fiber's terminal value, not a body chunk.
+        next unless chunk.is_a?(String)
+
         if max_response_length
           bytes += chunk.bytesize
           if bytes > max_response_length
@@ -81,9 +119,28 @@ module Rack
 
     protected
 
-    # Net::HTTPResponse
+    # Net::HTTPResponse. Fetching it lazily dials the backend, sends the request
+    # and reads the response head; the body stays unread on the socket until
+    # #each resumes the Fiber.
     def response
-      @response ||= session.begin_request_hacked(request)
+      return @response if @response
+
+      # Starting a request on a closed body would dial a connection that
+      # nothing can ever release (close_connection has already latched). Check
+      # AFTER the memo: #headers is legitimately read after #code auto-closed a
+      # 204/304, which must keep working.
+      raise IOError, "rack-proxy: backend response was closed before it was read" if connection_closed
+
+      @response = begin
+        @fiber = Fiber.new do
+          session.request(request) do |res|
+            Fiber.yield res
+            res.read_body { |chunk| Fiber.yield chunk }
+          end
+          :done
+        end
+        @fiber.resume
+      end
     end
 
     # Net::HTTP
@@ -100,6 +157,11 @@ module Rack
           http.key = key if key
           http.set_debug_output(logger) if logger
         end
+        # Net::HTTP retries idempotent requests once on transport errors — but a
+        # retry after the response was yielded would silently replay the request
+        # and restart the body mid-stream. The old patched path never retried;
+        # streaming must not either. (Set after the configure block on purpose.)
+        http.max_retries = 0
         http.start
       end
     end
@@ -110,22 +172,32 @@ module Rack
 
     attr_accessor :connection_closed
 
-    # Idempotent, best-effort teardown. Uses @session directly (never the lazy
-    # #session accessor) so closing a response whose body was never read does not
-    # open a connection just to tear it down. Swallows teardown errors: a
-    # half-read or already-reset backend must not crash the app or mask the
-    # original error.
+    # Idempotent, best-effort teardown. Uses @session/@fiber directly (never the
+    # lazy accessors) so closing a response that was never read does not dial
+    # the backend just to tear it down. A still-suspended request Fiber is
+    # unwound first (running net/http's own ensure blocks), then the connection
+    # is closed for real. Swallows teardown errors: a half-read or already-reset
+    # backend must not crash the app or mask the original error.
     def close_connection
-      return if connection_closed || @session.nil?
+      return if connection_closed
 
       self.connection_closed = true
-      begin
-        @session.end_request_hacked
-      ensure
-        @session.finish if @session.started?
+
+      if @fiber&.alive?
+        begin
+          @fiber.raise(StreamAborted, "backend stream closed before the response was fully read")
+        rescue StandardError
+          # Expected: StreamAborted itself (or whatever the unwind trips over)
+          # propagates back out of Fiber#raise; FiberError if another thread
+          # owns the Fiber. Either way we fall through to closing the socket.
+        end
       end
-    rescue StandardError
-      # best-effort: the connection may already be gone
+
+      begin
+        @session.finish if @session&.started?
+      rescue StandardError
+        # best-effort: the connection may already be gone
+      end
     end
   end
 end

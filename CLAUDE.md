@@ -12,7 +12,7 @@ The living improvement roadmap is [`MODERNIZATION_PLAN.md`](MODERNIZATION_PLAN.m
 
 ```sh
 bundle install
-bundle exec rake test        # full suite, fully OFFLINE, ~0.2s
+bundle exec rake test        # full suite, fully OFFLINE, ~2-3s
 LIVE=1 bundle exec rake test  # additionally runs real-internet smoke tests
 
 # Run the suite against a specific Rack major (CI does both):
@@ -24,7 +24,7 @@ The default suite must never touch the network. CI (`.github/workflows/ci.yml`)
 runs the matrix Ruby 3.1–3.4 × Rack 2/3, a `ruby head` canary, and a gem-build
 smoke test.
 
-## Architecture (three core files, ~360 lines)
+## Architecture (two core files + a deprecated shim, ~500 lines)
 
 - **`lib/rack/proxy.rb`** — `Rack::Proxy`. The entry point: `call` →
   `rewrite_env` → `perform_request` → `rewrite_response`. `perform_request`
@@ -33,25 +33,35 @@ smoke test.
   non-streaming (`streaming: false`). Subclasses override `rewrite_env` /
   `rewrite_response` (and sometimes `perform_request`); see `lib/rack_proxy_examples/`.
 - **`lib/rack/http_streaming_response.rb`** — `HttpStreamingResponse`, the lazy
-  Rack body used by the streaming path. Its `#each` streams the backend response
-  and closes the connection in `ensure`.
-- **`lib/net_http_hacked.rb`** — a monkey-patch of **private** `Net::HTTP`
-  internals that turns block-style streaming into return-style, so the response
-  can become a Rack body. This is the fragile heart of the streaming path.
+  Rack body used by the streaming path. It runs the public block form of
+  `Net::HTTP#request` inside a **Fiber**: the Fiber pauses once the status and
+  headers are in, and `#each` resumes it to pull body chunks; `#each`/`#close`
+  tear the connection down (early termination unwinds the Fiber via
+  `Fiber#raise`).
+- **`lib/net_http_hacked.rb`** — the *former* streaming engine: a monkey-patch
+  of private `Net::HTTP` internals, now a **deprecated shim** kept for one
+  release for external requirers. Nothing in the library loads it anymore; it
+  warns on require. Don't build anything new on it.
 
 ## Invariants — do not regress these (each has a guarding test)
 
-- **TLS verification defaults to `VERIFY_PEER`.** Set in **both** the streaming
-  and non-streaming branches of `perform_request` as
-  `@verify_mode || OpenSSL::SSL::VERIFY_PEER`. If you touch one branch, touch the
-  other — they must match. This regressed to `VERIFY_NONE`-by-default for years.
-  Guards: `test_ssl_default_is_verify_peer`,
-  `test_https_default_rejects_invalid_certificate`.
+- **TLS verification defaults to `VERIFY_PEER`.** The fallback
+  (`@verify_mode || OpenSSL::SSL::VERIFY_PEER`) lives in exactly ONE place —
+  `configure_backend_connection` in `lib/rack/proxy.rb` — and both the streaming
+  and non-streaming paths must keep going through it. Never re-introduce
+  per-branch TLS setup; the duplicated version of this config shipped
+  `VERIFY_NONE`-by-default for years. Guards: `test_ssl_default_is_verify_peer`,
+  `test_https_default_rejects_invalid_certificate(_streaming)`.
 - **Connection failures return `502`, never raise.** Guards:
   `test_connection_refused_returns_502(_streaming)`, `test_unknown_host_returns_502`.
-- **Hop-by-hop headers are stripped from the response.** Guard:
-  `test_response_header_included_Hop_by_hop`. (Request-side stripping is still a
-  TODO — see MODERNIZATION_PLAN P0-2.)
+- **Hop-by-hop headers are stripped from both the response and the forwarded
+  request** (request side also drops anything named by the inbound `Connection`
+  header). Guards: `test_response_header_included_Hop_by_hop`,
+  `test_request_hop_by_hop_headers_are_stripped`.
+- **The streaming session never retries (`max_retries = 0`).** Net::HTTP's
+  default idempotent retry would silently replay the request and restart the
+  body after the headers were already sent to the client. Guard:
+  `test_streaming_session_never_retries`.
 - **No entity body for 1xx/204/304.** Guards: `test_no_entity_body_for_204/304`.
 - **Non-rewindable request bodies must not raise** (Rack 3 input streams need not
   respond to `#rewind`). Guard: `test_non_rewindable_body_is_forwarded_without_raising`.
@@ -60,14 +70,18 @@ smoke test.
 
 ## Traps — things that look wrong but are load-bearing
 
-- **Do not "clean up," modernize, or delete `net_http_hacked.rb` casually.** It
-  depends on private `Net::HTTP` internals; small changes silently break
-  streaming across Ruby versions. The planned replacement is a Fiber-based
-  rewrite (MODERNIZATION_PLAN P1-5) — do that deliberately, with tests, not as a
-  drive-by refactor.
-- **Never add `webmock` or `vcr`.** They monkey-patch `net/http` and break the
-  streaming path. Tests exercise real traffic against a local WEBrick server
-  instead.
+- **The Fiber plumbing in `HttpStreamingResponse` is deliberate — don't
+  "simplify" it.** Three load-bearing choices: (1) `max_retries = 0` (see
+  invariants); (2) early termination unwinds the Fiber with `StreamAborted`, a
+  direct `StandardError` subclass that must never match the network-error
+  classes `Net::HTTP#request` retries on/rescues, or an abort could replay the
+  request; (3) the request's `@decode_content` is forced off so gzip bodies are
+  forwarded verbatim (inflating them desyncs Content-Length/Content-Encoding).
+  A Fiber is also thread-affine: `#close` from a foreign thread skips the unwind
+  and hard-closes the socket — that fallback is intentional.
+- **Never add `webmock` or `vcr` to this repo's tests.** Tests must exercise
+  real Net::HTTP traffic against the local WEBrick server — request-stubbing
+  layers would turn the streaming tests into fiction.
 - **New tests must be offline.** Use `with_webrick_proxy` (in
   `test/rack_proxy_test.rb`) or `ProxyTestServer` (in
   `test/support/proxy_test_server.rb`). Do **not** reintroduce live-host tests;
