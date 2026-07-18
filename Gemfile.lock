@@ -12,6 +12,7 @@ GEM
     rack-test (2.1.0)
       rack (>= 1.3)
     rake (13.0.6)
+    simplecov (1.0.1)
     test-unit (3.6.1)
       power_assert
     webrick (1.9.2)
@@ -25,6 +26,7 @@ DEPENDENCIES
   rack-proxy!
   rack-test
   rake
+  simplecov
   test-unit
   webrick
 

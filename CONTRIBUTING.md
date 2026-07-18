@@ -8,8 +8,12 @@ behavior documented in [`CLAUDE.md`](CLAUDE.md).
 
 ```sh
 bundle install
-bundle exec rake test          # full suite, fully OFFLINE, ~0.2s
+bundle exec rake test             # full suite, fully OFFLINE, ~2-3s
+COVERAGE=1 bundle exec rake test  # same, plus a SimpleCov report in coverage/
 ```
+
+Coverage has a ratcheted floor (line 97 / branch 85, enforced by the CI lint
+job) — raise it as coverage improves; never lower it to make a change pass.
 
 The default suite never touches the network. To additionally run the real-internet
 smoke tests:
