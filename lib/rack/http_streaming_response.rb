@@ -4,6 +4,10 @@ require "stringio"
 module Rack
   # Wraps the hacked net/http in a Rack way.
   class HttpStreamingResponse
+    # Raised while streaming when the backend body exceeds max_response_length.
+    # The status/headers are already sent, so the transfer is aborted mid-stream.
+    class ResponseTooLarge < StandardError; end
+
     STATUSES_WITH_NO_ENTITY_BODY = {
       204 => true,
       205 => true,
@@ -11,9 +15,15 @@ module Rack
     }.freeze
 
     attr_accessor :use_ssl, :verify_mode, :read_timeout, :ssl_version, :cert, :key, :logger
+    attr_accessor :max_response_length
 
-    def initialize(request, host, port = nil)
-      @request, @host, @port = request, host, port
+    # An optional block receives the Net::HTTP instance for configuration before
+    # it connects — this is the single source of truth used by Rack::Proxy (see
+    # Rack::Proxy#configure_backend_connection). When no block is given, the
+    # public accessors above are applied instead (backward-compatible path for
+    # direct users of this class).
+    def initialize(request, host, port = nil, &configure)
+      @request, @host, @port, @configure = request, host, port, configure
     end
 
     def body
@@ -36,7 +46,16 @@ module Rack
     def each(&block)
       return if connection_closed
 
-      response.read_body(&block)
+      bytes = 0
+      response.read_body do |chunk|
+        if max_response_length
+          bytes += chunk.bytesize
+          if bytes > max_response_length
+            raise ResponseTooLarge, "backend response exceeded max_response_length=#{max_response_length}"
+          end
+        end
+        block.call(chunk)
+      end
     rescue StandardError => e
       # The status/headers are already on the wire, so we can't turn a mid-stream
       # backend failure into a 502. Log it and re-raise so the server aborts the
@@ -68,13 +87,17 @@ module Rack
     # Net::HTTP
     def session
       @session ||= Net::HTTP.new(host, port).tap do |http|
-        http.use_ssl = use_ssl
-        http.verify_mode = verify_mode
-        http.read_timeout = read_timeout
-        http.ssl_version = ssl_version if ssl_version
-        http.cert = cert if cert
-        http.key = key if key
-        http.set_debug_output(logger) if logger
+        if @configure
+          @configure.call(http)
+        else
+          http.use_ssl = use_ssl
+          http.verify_mode = verify_mode
+          http.read_timeout = read_timeout
+          http.ssl_version = ssl_version if ssl_version
+          http.cert = cert if cert
+          http.key = key if key
+          http.set_debug_output(logger) if logger
+        end
         http.start
       end
     end

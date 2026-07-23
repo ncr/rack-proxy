@@ -37,4 +37,9 @@ class ExampleServiceProxy < Rack::Proxy
   end
 end
 
-Rails.application.config.middleware.use ExampleServiceProxy, backend: ENV['SERVICE_URL'], streaming: false
+# Only wire into the middleware stack when running inside a booted Rails app, so
+# this file is safe to require anywhere (doc/RBI tooling, a stray require) without
+# crashing or silently installing a proxy.
+if defined?(Rails) && Rails.respond_to?(:application) && Rails.application
+  Rails.application.config.middleware.use ExampleServiceProxy, backend: ENV['SERVICE_URL'], streaming: false
+end

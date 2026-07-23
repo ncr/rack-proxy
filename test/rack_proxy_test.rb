@@ -55,8 +55,10 @@ class RackProxyTest < Test::Unit::TestCase
     end
   end
 
+  # Uses the modern :min_version option (:ssl_version is deprecated). The other
+  # _tls test below still exercises :ssl_version for backward compatibility.
   def test_https_streaming_tls
-    with_webrick_proxy(ssl: true, ssl_verify_none: true, ssl_version: :TLSv1_2) do |port, proxy|
+    with_webrick_proxy(ssl: true, ssl_verify_none: true, min_version: :TLS1_2) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
       get 'https://example.com'
       assert last_response.ok?
@@ -320,6 +322,58 @@ class RackProxyTest < Test::Unit::TestCase
     end
   end
 
+  # P1-6: with a :ca_file that trusts the backend's CA, the default VERIFY_PEER
+  # must *accept* the (otherwise-untrusted) cert. This is the keystone hermetic
+  # VERIFY_PEER-success test that previously required a live host.
+  def test_https_ca_file_accepts_trusted_cert_non_streaming
+    with_webrick_proxy(ssl: true, ca_signed: true, streaming: false, ca_file: ProxyTestServer.ca_file) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get 'https://example.com/'
+      assert last_response.ok?, 'VERIFY_PEER must accept a cert signed by the configured ca_file'
+      assert_match(/Example Domain/, last_response.body)
+    end
+  end
+
+  def test_https_ca_file_accepts_trusted_cert_streaming
+    with_webrick_proxy(ssl: true, ca_signed: true, streaming: true, ca_file: ProxyTestServer.ca_file) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get 'https://example.com/'
+      assert last_response.ok?
+      assert_match(/Example Domain/, last_response.body)
+    end
+  end
+
+  # Without the ca_file, the same CA-signed cert is untrusted and must be rejected
+  # (-> 502), proving the ca_file is what establishes trust.
+  def test_https_ca_signed_cert_rejected_without_ca_file
+    with_webrick_proxy(ssl: true, ca_signed: true, streaming: false) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get 'https://example.com/'
+      assert_equal 502, last_response.status
+    end
+  end
+
+  # P2-2: :open_timeout / :write_timeout must be wired onto the connection
+  # (Net::HTTP defaults them to 60s, unreachable via :read_timeout alone).
+  def test_connect_and_write_timeouts_are_applied
+    proxy = Rack::Proxy.new(read_timeout: 5, open_timeout: 3, write_timeout: 7)
+    http = Net::HTTP.new("127.0.0.1", 80)
+    proxy.send(:configure_backend_connection, http, use_ssl: false, read_timeout: 5)
+    assert_equal 5, http.read_timeout
+    assert_equal 3, http.open_timeout
+    assert_equal 7, http.write_timeout
+  end
+
+  # P1-6: :ca_file / :cert_store must be wired onto the TLS connection.
+  def test_ca_file_and_cert_store_are_applied
+    store = OpenSSL::X509::Store.new
+    proxy = Rack::Proxy.new(ca_file: "/tmp/some-ca.pem", cert_store: store)
+    http = Net::HTTP.new("127.0.0.1", 443)
+    proxy.send(:configure_backend_connection, http, use_ssl: true, read_timeout: 5)
+    assert_equal "/tmp/some-ca.pem", http.ca_file
+    assert_same store, http.cert_store
+  end
+
   # Issue #80: a :logger option should pipe Net::HTTP debug output to the
   # given sink (anything responding to #<<). We use a StringIO to capture it.
   def test_logger_captures_request_in_non_streaming
@@ -451,6 +505,43 @@ class RackProxyTest < Test::Unit::TestCase
     @app = nil
   end
 
+  # P2-3: :max_response_length caps the backend response size.
+  def test_max_response_length_rejects_declared_oversize_non_streaming
+    with_webrick_proxy(streaming: false, max_response_length: 10) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get "/" # body is well over 10 bytes, with a Content-Length
+      assert_equal 502, last_response.status
+    end
+  end
+
+  def test_max_response_length_rejects_declared_oversize_streaming
+    with_webrick_proxy(streaming: true, max_response_length: 10) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get "/"
+      assert_equal 502, last_response.status
+    end
+  end
+
+  # No Content-Length (chunked): the cap must still fire incrementally while
+  # streaming, aborting the transfer with ResponseTooLarge.
+  def test_max_response_length_enforced_while_streaming_chunked
+    with_webrick_proxy(streaming: true, max_response_length: 5) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      status, _headers, body = proxy.call(Rack::MockRequest.env_for("/chunked"))
+      assert_equal 200, status.to_i, "headers precede the body, so status is still 200"
+      assert_raise(Rack::HttpStreamingResponse::ResponseTooLarge) { body.each { |_chunk| } }
+    end
+  end
+
+  def test_max_response_length_allows_within_limit
+    with_webrick_proxy(streaming: false, max_response_length: 100_000) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get "/"
+      assert last_response.ok?
+      assert_match(/Example Domain/, last_response.body)
+    end
+  end
+
   private
 
   def assert_gzip_forwarded_verbatim(streaming:)
@@ -508,8 +599,8 @@ class RackProxyTest < Test::Unit::TestCase
   # the network. Pass ssl: true for an HTTPS backend with a self-signed cert; all
   # other keyword options are forwarded to the proxy (e.g. streaming:,
   # ssl_verify_none:, ssl_version:, logger:).
-  def with_webrick_proxy(ssl: false, **proxy_opts)
-    server, port = ProxyTestServer.start_server(ssl: ssl)
+  def with_webrick_proxy(ssl: false, ca_signed: false, **proxy_opts)
+    server, port = ProxyTestServer.start_server(ssl: ssl, ca_signed: ca_signed)
 
     proxy = HostProxy.new(**proxy_opts)
     @app = proxy

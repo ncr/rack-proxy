@@ -17,7 +17,7 @@ Gem::Specification.new do |s|
   s.files = Dir["lib/**/*.rb"] + %w[README.md LICENSE rack-proxy.gemspec]
   s.require_paths = ["lib"]
 
-  s.add_dependency("rack")
+  s.add_dependency("rack", ">= 2.0", "< 4")
   s.add_development_dependency("rack-test")
   s.add_development_dependency("test-unit")
   s.add_development_dependency("webrick")

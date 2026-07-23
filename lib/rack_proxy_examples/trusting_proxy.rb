@@ -19,7 +19,10 @@ class TrustingProxy < Rack::Proxy
 end
 
 # Pass ssl_verify_none: true to skip TLS certificate verification.
-Rails.application.config.middleware.use TrustingProxy,
-  backend: 'https://self-signed.badssl.com',
-  streaming: false,
-  ssl_verify_none: true
+# Only wire into the middleware stack when running inside a booted Rails app.
+if defined?(Rails) && Rails.respond_to?(:application) && Rails.application
+  Rails.application.config.middleware.use TrustingProxy,
+    backend: 'https://self-signed.badssl.com',
+    streaming: false,
+    ssl_verify_none: true
+end
