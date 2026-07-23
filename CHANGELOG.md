@@ -10,9 +10,8 @@ Nothing yet.
 
 ## [1.0.0] - 2026-07-18
 
-The 2026 modernization + security-hardening release (see
-`MODERNIZATION_PLAN.md`). From 1.0.0 on this project follows SemVer strictly:
-breaking changes only in majors.
+The 2026 modernization + security-hardening release. From 1.0.0 on this
+project follows SemVer strictly: breaking changes only in majors.
 
 ### Breaking changes
 
