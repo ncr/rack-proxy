@@ -23,7 +23,7 @@ jobs:
       id-token: write # OIDC token for rubygems.org Trusted Publishing
       contents: write # let `rake release` push the v* tag if it isn't already present
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
