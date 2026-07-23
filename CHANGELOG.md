@@ -33,8 +33,15 @@ This entry collects the 2026 modernization + security-hardening work (see
   exact protocol and forbids TLS 1.3).
 - `HttpStreamingResponse#close` so Rack servers release the backend connection on
   early termination (HEAD, 304, client disconnect) instead of leaking it until GC.
+- Opt-in request hardening: `strip_credentials: true` drops the client's
+  `Cookie`/`Authorization` headers from the forwarded request, and
+  `replace_x_forwarded_for: true` forwards only this hop's `REMOTE_ADDR`
+  instead of appending to the client-supplied `X-Forwarded-For` chain.
 - Project scaffolding: `SECURITY.md`, `CHANGELOG.md`, `CONTRIBUTING.md`,
-  `CLAUDE.md`/`AGENTS.md`, GitHub Actions CI (Ruby 3.1–3.4 × Rack 2/3), Dependabot.
+  `CLAUDE.md`/`AGENTS.md`, GitHub Actions CI (Ruby 3.1–3.4 × Rack 2/3),
+  Dependabot, issue/PR templates, SimpleCov with a ratcheted coverage floor
+  (`COVERAGE=1`), and Standard (`standardrb`) + `bundler-audit` enforced by a
+  CI lint job.
 
 ### Changed
 
@@ -69,6 +76,14 @@ This entry collects the 2026 modernization + security-hardening work (see
 - `require "net_http_hacked"` — the monkey-patch is no longer used by the
   library. The file remains as a functional shim that warns on require, and
   will be removed in a future release.
+
+### Removed
+
+- The bundled examples moved from the gem load path
+  (`lib/rack_proxy_examples/`) to [`examples/`](examples/) in the repository.
+  `require "rack_proxy_examples/..."` no longer works — copy the example class
+  into your app instead (they were never safe to require blindly: each one
+  installs itself into the Rails middleware stack when Rails is booted).
 
 ## [0.8.3] - 2025
 

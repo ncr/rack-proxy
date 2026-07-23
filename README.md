@@ -63,6 +63,8 @@ Options can be set when initializing the middleware or overriding a method.
 * `:ssl_version` - **deprecated**; pins an exact protocol (forbids TLS 1.3). Use `:min_version` / `:max_version`.
 * `:max_response_length` - cap (in bytes) on the backend response size; a larger response is refused with `502` (streaming aborts once the cap is passed).
 * `:username` / `:password` - HTTP Basic credentials sent to the backend.
+* `:strip_credentials` - when `true`, drop the client's `Cookie` and `Authorization` headers instead of forwarding them — see [Security considerations](#security-considerations). The strip applies **after** `rewrite_env`, so a credential injected there is stripped too; attach a proxy-owned credential with `:username`/`:password` instead.
+* `:replace_x_forwarded_for` - when `true`, discard the client-supplied `X-Forwarded-For` chain and forward only this hop's `REMOTE_ADDR` (default appends to the chain) — see [Security considerations](#security-considerations).
 * `:logger` - any object responding to `#<<` (e.g. `$stdout`, a `StringIO`, or a Ruby `Logger`). Wired to `Net::HTTP#set_debug_output` so the HTTP wire-level conversation is written to the sink. Useful for debugging.
 
 Two request-scoped overrides can also be set in `env` (e.g. from `rewrite_env`):
@@ -95,9 +97,9 @@ rack-proxy forwards attacker-influenced requests to a backend and relays the bac
 
     A refused backend is answered with `502`. (Making dynamic, `Host`-derived backends opt-in by default is planned for a future major version.)
 
-* **Credential forwarding.** All incoming `HTTP_*` headers are forwarded, including `Authorization` and `Cookie`. Don't proxy to a different trust domain with credentials attached; strip them in `rewrite_env` (e.g. `env['HTTP_COOKIE'] = ''`). Over an `http://` backend these travel in cleartext.
+* **Credential forwarding.** All incoming `HTTP_*` headers are forwarded, including `Authorization` and `Cookie`. Don't proxy to a different trust domain with credentials attached — pass `strip_credentials: true` to drop both (or do finer-grained filtering in `rewrite_env`). Over an `http://` backend these travel in cleartext.
 
-* **X-Forwarded-For.** rack-proxy appends `REMOTE_ADDR` to any inbound `X-Forwarded-For`. If your clients are not behind a trusted proxy, the inbound value is attacker-controlled; sanitize it in `rewrite_env` when the backend trusts that header.
+* **X-Forwarded-For.** rack-proxy appends `REMOTE_ADDR` to any inbound `X-Forwarded-For`. If your clients are not behind a trusted proxy, the inbound value is attacker-controlled; pass `replace_x_forwarded_for: true` to forward only the directly-connected peer's address when the backend trusts that header.
 
 * **TLS verification** defaults to `VERIFY_PEER`. For private-CA backends use `:ca_file` / `:cert_store` rather than `ssl_verify_none: true`.
 
@@ -110,28 +112,26 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 Examples
 ----
 
-See and run the examples below from `lib/rack_proxy_examples/`. To mount any example into an existing Rails app:
+The snippets below (also in [`examples/`](examples/) in the repository) are meant to be **copied into your app** — e.g. into `app/middleware/` or `lib/` — and adapted. They are not shipped in the gem and cannot be `require`d from it. To mount one in Rails, copy the class into your app and add it to the middleware stack in an initializer:
 
-1. create `config/initializers/proxy.rb`
-2. modify the file to require the example file
 ```ruby
-require 'rack_proxy_examples/forward_host'
+# config/initializers/proxy.rb
+Rails.application.config.middleware.use ForwardHost, backend: "http://example.com"
 ```
 
 ### Forward request to Host and Insert Header
 
-Test with `require 'rack_proxy_examples/forward_host'`
+From [`examples/forward_host.rb`](examples/forward_host.rb):
 
 ```ruby
 class ForwardHost < Rack::Proxy
-
   def rewrite_env(env)
     env["HTTP_HOST"] = "example.com"
     env
   end
 
   def rewrite_response(triplet)
-    status, headers, body = triplet
+    _, headers, _ = triplet
 
     # example of inserting an additional header
     headers["X-Foo"] = "Bar"
@@ -143,24 +143,22 @@ class ForwardHost < Rack::Proxy
 
     triplet
   end
-
 end
 ```
 
 ### Disable SSL session verification when proxying a server with e.g. self-signed SSL certs
 
-Test with `require 'rack_proxy_examples/trusting_proxy'`
+From [`examples/trusting_proxy.rb`](examples/trusting_proxy.rb):
 
 ```ruby
 class TrustingProxy < Rack::Proxy
-
   def rewrite_env(env)
     env["HTTP_HOST"] = "self-signed.badssl.com"
     env
   end
 
   def rewrite_response(triplet)
-    status, headers, body = triplet
+    _, headers, _ = triplet
 
     # if you rewrite env, it appears that content-length isn't calculated correctly
     # resulting in only partial responses being sent to users
@@ -169,7 +167,6 @@ class TrustingProxy < Rack::Proxy
 
     triplet
   end
-
 end
 
 # Pass ssl_verify_none: true to skip TLS certificate verification.
@@ -178,7 +175,7 @@ Rack::Proxy.new(ssl_verify_none: true)
 
 ### Rails middleware example
 
-Test with `require 'rack_proxy_examples/example_service_proxy'`
+From [`examples/example_service_proxy.rb`](examples/example_service_proxy.rb):
 
 ```ruby
 ###
@@ -190,30 +187,30 @@ Test with `require 'rack_proxy_examples/example_service_proxy'`
 # 3. install Rack-Proxy in `Gemfile`
 #    a. `gem 'rack-proxy', '~> 0.8.0'`
 # 4. install gem: `bundle install`
-# 5. create `config/initializers/proxy.rb` adding this line `require 'rack_proxy_examples/example_service_proxy'`
+# 5. copy the class into your app and mount it from `config/initializers/proxy.rb`
 # 6. run: `SERVICE_URL=http://guides.rubyonrails.org rails server`
 # 7. open in browser: `http://localhost:3000/example_service`
 #
 ###
-ENV['SERVICE_URL'] ||= 'http://guides.rubyonrails.org'
+ENV["SERVICE_URL"] ||= "http://guides.rubyonrails.org"
 
 class ExampleServiceProxy < Rack::Proxy
   def perform_request(env)
     request = Rack::Request.new(env)
 
     # use rack proxy for anything hitting our host app at /example_service
-    if request.path =~ %r{^/example_service}
-        backend = URI(ENV['SERVICE_URL'])
-        # most backends required host set properly, but rack-proxy doesn't set this for you automatically
-        # even when a backend host is passed in via the options
-        env["HTTP_HOST"] = backend.host
+    if %r{^/example_service}.match?(request.path)
+      backend = URI(ENV["SERVICE_URL"])
+      # most backends required host set properly, but rack-proxy doesn't set this for you automatically
+      # even when a backend host is passed in via the options
+      env["HTTP_HOST"] = backend.host
 
-        # This is the only path that needs to be set currently on Rails 5 & greater
-        env['PATH_INFO'] = ENV['SERVICE_PATH'] || '/configuring.html'
+      # This is the only path that needs to be set currently on Rails 5 & greater
+      env["PATH_INFO"] = ENV["SERVICE_PATH"] || "/configuring.html"
 
-        # don't send your sites cookies to target service, unless it is a trusted internal service that can parse all your cookies
-        env['HTTP_COOKIE'] = ''
-        super(env)
+      # don't send your sites cookies to target service, unless it is a trusted internal service that can parse all your cookies
+      env["HTTP_COOKIE"] = ""
+      super
     else
       @app.call(env)
     end
@@ -223,7 +220,7 @@ end
 
 ### Using as middleware to forward only some extensions to another Application
 
-Test with `require 'rack_proxy_examples/rack_php_proxy'`
+From [`examples/rack_php_proxy.rb`](examples/rack_php_proxy.rb):
 
 Example: Proxying only requests that end with ".php" could be done like this:
 
@@ -232,28 +229,27 @@ Example: Proxying only requests that end with ".php" could be done like this:
 # Open http://localhost:3000/test.php to trigger proxy
 ###
 class RackPhpProxy < Rack::Proxy
-
   def perform_request(env)
     request = Rack::Request.new(env)
-    if request.path =~ %r{\.php}
+    if %r{\.php}.match?(request.path)
       env["HTTP_HOST"] = ENV["HTTP_HOST"] ? URI(ENV["HTTP_HOST"]).host : "localhost"
-      ENV["PHP_PATH"] ||= '/manual/en/tutorial.firstpage.php'
+      ENV["PHP_PATH"] ||= "/manual/en/tutorial.firstpage.php"
 
       # Rails 3 & 4
       env["REQUEST_PATH"] = ENV["PHP_PATH"] || "/php/#{request.fullpath}"
       # Rails 5 and above
-      env['PATH_INFO'] = ENV["PHP_PATH"] || "/php/#{request.fullpath}"
+      env["PATH_INFO"] = ENV["PHP_PATH"] || "/php/#{request.fullpath}"
 
-      env['content-length'] = nil
+      env["content-length"] = nil
 
-      super(env)
+      super
     else
       @app.call(env)
     end
   end
 
   def rewrite_response(triplet)
-    status, headers, body = triplet
+    _, headers, _ = triplet
 
     # if you proxy depending on the backend, it appears that content-length isn't calculated correctly
     # resulting in only partial responses being sent to users

@@ -4,3 +4,6 @@ pkg/*
 
 # Lockfiles for the CI-only gemfiles are resolved fresh per run.
 gemfiles/*.lock
+
+# SimpleCov output (COVERAGE=1 bundle exec rake test)
+coverage/

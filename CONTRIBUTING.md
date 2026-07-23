@@ -8,8 +8,14 @@ behavior documented in [`CLAUDE.md`](CLAUDE.md).
 
 ```sh
 bundle install
-bundle exec rake test          # full suite, fully OFFLINE, ~0.2s
+bundle exec rake test             # full suite, fully OFFLINE, ~2-3s
+COVERAGE=1 bundle exec rake test  # same, plus a SimpleCov report in coverage/
+bundle exec standardrb            # style check (CI-blocking); --fix to autofix
+bundle exec bundler-audit check --update  # dependency advisory audit
 ```
+
+Coverage has a ratcheted floor (line 96.5 / branch 84.5, enforced by the CI
+lint job) — raise it as coverage improves; never lower it to make a change pass.
 
 The default suite never touches the network. To additionally run the real-internet
 smoke tests:
@@ -48,7 +54,8 @@ BUNDLE_GEMFILE=gemfiles/rack_2.gemfile bundle exec rake test
 ## Pull requests
 
 1. Fork and branch from `master`.
-2. Make the change with tests; keep `bundle exec rake test` green on Rack 2 and 3.
+2. Make the change with tests; keep `bundle exec rake test` green on Rack 2 and 3,
+   and `bundle exec standardrb` clean.
 3. Add a `CHANGELOG.md` entry under `[Unreleased]`.
 4. Open the PR describing the streaming/non-streaming paths affected and the
    backend scheme, if relevant.

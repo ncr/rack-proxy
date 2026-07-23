@@ -18,6 +18,7 @@ require "tempfile"
 #   GET  /cookies/set  -> sets a Set-Cookie header (?test=<value>)
 #   GET  /echo-headers -> sets x-custom: value-here, body "ok"
 #   POST /echo-body    -> echoes the request body verbatim
+#   GET  /echo-request-headers -> body lists received cookie/authorization/XFF
 #   GET  /no-content   -> 204 No Content
 #   GET  /not-modified -> 304 Not Modified
 #   GET  /empty        -> 200 with an empty body
@@ -41,9 +42,9 @@ module ProxyTestServer
 
     if ssl
       cert, key = ca_signed ? ca_signed_cert : self_signed_cert
-      options[:SSLEnable]      = true
+      options[:SSLEnable] = true
       options[:SSLCertificate] = cert
-      options[:SSLPrivateKey]  = key
+      options[:SSLPrivateKey] = key
     end
 
     server = WEBrick::HTTPServer.new(**options)
@@ -72,9 +73,19 @@ module ProxyTestServer
     end
 
     server.mount_proc("/echo-body") { |req, res| res.body = req.body.to_s }
-    server.mount_proc("/no-content")   { |_req, res| res.status = 204 }
+
+    # Echoes selected request headers back in the body (one "name: value" line
+    # per header actually received) so tests can assert what the proxy forwarded.
+    server.mount_proc("/echo-request-headers") do |req, res|
+      res.content_type = "text/plain"
+      res.body = %w[cookie authorization x-forwarded-for].filter_map { |name|
+        value = req[name]
+        "#{name}: #{value}" if value
+      }.join("\n")
+    end
+    server.mount_proc("/no-content") { |_req, res| res.status = 204 }
     server.mount_proc("/not-modified") { |_req, res| res.status = 304 }
-    server.mount_proc("/empty")        { |_req, res| res.body = "" }
+    server.mount_proc("/empty") { |_req, res| res.body = "" }
 
     server.mount_proc("/chunked") do |_req, res|
       res.chunked = true
@@ -113,17 +124,17 @@ module ProxyTestServer
       key = OpenSSL::PKey::RSA.new(2048)
       cert = OpenSSL::X509::Certificate.new
       name = OpenSSL::X509::Name.parse("/CN=127.0.0.1")
-      cert.version    = 2
-      cert.serial     = 1
-      cert.subject    = name
-      cert.issuer     = name
+      cert.version = 2
+      cert.serial = 1
+      cert.subject = name
+      cert.issuer = name
       cert.public_key = key.public_key
       cert.not_before = Time.now - 3600
-      cert.not_after  = Time.now + (365 * 24 * 3600)
+      cert.not_after = Time.now + (365 * 24 * 3600)
 
       ef = OpenSSL::X509::ExtensionFactory.new
       ef.subject_certificate = cert
-      ef.issuer_certificate  = cert
+      ef.issuer_certificate = cert
       cert.add_extension(ef.create_extension("basicConstraints", "CA:TRUE", true))
       cert.add_extension(ef.create_extension("subjectAltName", "IP:127.0.0.1,DNS:localhost", false))
       cert.sign(key, OpenSSL::Digest.new("SHA256"))
@@ -139,17 +150,17 @@ module ProxyTestServer
       key = OpenSSL::PKey::RSA.new(2048)
       cert = OpenSSL::X509::Certificate.new
       name = OpenSSL::X509::Name.parse("/CN=rack-proxy-test-ca")
-      cert.version    = 2
-      cert.serial     = 1
-      cert.subject    = name
-      cert.issuer     = name
+      cert.version = 2
+      cert.serial = 1
+      cert.subject = name
+      cert.issuer = name
       cert.public_key = key.public_key
       cert.not_before = Time.now - 3600
-      cert.not_after  = Time.now + (365 * 24 * 3600)
+      cert.not_after = Time.now + (365 * 24 * 3600)
 
       ef = OpenSSL::X509::ExtensionFactory.new
       ef.subject_certificate = cert
-      ef.issuer_certificate  = cert
+      ef.issuer_certificate = cert
       cert.add_extension(ef.create_extension("basicConstraints", "CA:TRUE", true))
       cert.add_extension(ef.create_extension("keyUsage", "keyCertSign, cRLSign", true))
       cert.sign(key, OpenSSL::Digest.new("SHA256"))
@@ -165,17 +176,17 @@ module ProxyTestServer
       ca_cert, ca_key = certificate_authority
       key = OpenSSL::PKey::RSA.new(2048)
       cert = OpenSSL::X509::Certificate.new
-      cert.version    = 2
-      cert.serial     = 2
-      cert.subject    = OpenSSL::X509::Name.parse("/CN=127.0.0.1")
-      cert.issuer     = ca_cert.subject
+      cert.version = 2
+      cert.serial = 2
+      cert.subject = OpenSSL::X509::Name.parse("/CN=127.0.0.1")
+      cert.issuer = ca_cert.subject
       cert.public_key = key.public_key
       cert.not_before = Time.now - 3600
-      cert.not_after  = Time.now + (365 * 24 * 3600)
+      cert.not_after = Time.now + (365 * 24 * 3600)
 
       ef = OpenSSL::X509::ExtensionFactory.new
       ef.subject_certificate = cert
-      ef.issuer_certificate  = ca_cert
+      ef.issuer_certificate = ca_cert
       cert.add_extension(ef.create_extension("basicConstraints", "CA:FALSE", true))
       cert.add_extension(ef.create_extension("subjectAltName", "IP:127.0.0.1,DNS:localhost", false))
       cert.sign(ca_key, OpenSSL::Digest.new("SHA256"))

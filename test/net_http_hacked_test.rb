@@ -19,7 +19,6 @@ end
 NET_HTTP_HACKED_REQUIRE_WARNING = captured.string
 
 class NetHttpHackedTest < Test::Unit::TestCase
-
   def setup
     @server, @port = ProxyTestServer.start_server(ssl: false)
   end
@@ -41,7 +40,7 @@ class NetHttpHackedTest < Test::Unit::TestCase
     lib = File.expand_path("../lib", __dir__)
     out = IO.popen(
       [RbConfig.ruby, "-I", lib, "-e",
-       'require "rack/proxy"; print Net::HTTP.method_defined?(:begin_request_hacked) ? "LOADED" : "CLEAN"'],
+        'require "rack/proxy"; print Net::HTTP.method_defined?(:begin_request_hacked) ? "LOADED" : "CLEAN"'],
       err: [:child, :out], &:read
     )
     assert_match(/CLEAN\z/, out, "requiring rack/proxy must not load the deprecated net_http_hacked shim")
@@ -77,5 +76,4 @@ class NetHttpHackedTest < Test::Unit::TestCase
 
     http.end_request_hacked
   end
-
 end

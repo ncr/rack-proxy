@@ -2,8 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, "modernization/**" ]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
@@ -26,11 +27,15 @@ jobs:
           bundler-cache: true
       - run: bundle exec rake test
 
-  # Non-blocking early-warning signal against the next Ruby.
+  # Non-blocking early-warning signal against the next Ruby. Uses a matrix
+  # gemfile (fresh resolve, no dev-tooling toolchain) so a rubocop/parser
+  # native-extension build failure on a brand-new Ruby can't eat the signal.
   test-head:
     name: "test (ruby head, allowed to fail)"
     runs-on: ubuntu-latest
     continue-on-error: true
+    env:
+      BUNDLE_GEMFILE: gemfiles/rack_3.gemfile
     steps:
       - uses: actions/checkout@v4
       - uses: ruby/setup-ruby@v1
@@ -38,6 +43,25 @@ jobs:
           ruby-version: head
           bundler-cache: true
       - run: bundle exec rake test
+
+  # Style + dependency audit + coverage floor (uses the default Gemfile, the
+  # only one that carries the dev tooling).
+  lint:
+    name: lint, audit & coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - run: bundle exec standardrb
+      - run: bundle exec rake test
+        env:
+          COVERAGE: "1"
+      # Last on purpose: a fresh advisory in some dev dependency shouldn't
+      # eat the style/coverage feedback a PR author can actually act on.
+      - run: bundle exec bundler-audit check --update
 
   # Verify the gem packages and installs with the files the gemspec declares.
   build:

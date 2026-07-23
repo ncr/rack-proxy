@@ -1,0 +1,78 @@
+name: Bug report
+description: Report a problem with rack-proxy
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The streaming and non-streaming paths diverge at
+        the network layer, so the fields below (especially `:streaming` and the
+        backend scheme) are what triage needs first.
+
+        **Do not report security vulnerabilities here** — see
+        [SECURITY.md](../blob/master/SECURITY.md) for private reporting.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+      description: Include the full error and backtrace if there is one.
+    validations:
+      required: true
+  - type: input
+    id: rack-proxy-version
+    attributes:
+      label: rack-proxy version
+      placeholder: "e.g. 0.8.3"
+    validations:
+      required: true
+  - type: input
+    id: ruby-version
+    attributes:
+      label: Ruby version
+      placeholder: "e.g. 3.3.4 (ruby -v)"
+    validations:
+      required: true
+  - type: input
+    id: rack-version
+    attributes:
+      label: Rack version (and server)
+      placeholder: "e.g. rack 3.2.6 on puma 6.6"
+    validations:
+      required: true
+  - type: dropdown
+    id: streaming
+    attributes:
+      label: "`:streaming` option"
+      description: The default is `true`. The two modes use different code paths.
+      options:
+        - "true (default)"
+        - "false"
+        - "tried both, same behavior"
+        - "tried both, different behavior (describe above)"
+    validations:
+      required: true
+  - type: dropdown
+    id: backend-scheme
+    attributes:
+      label: Backend scheme
+      options:
+        - "http"
+        - "https"
+        - "both"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: >
+        Ideally a minimal `config.ru` (plus the subclass, if any) and the curl
+        command that triggers the problem.
+      render: ruby
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else?
+      description: >
+        Proxies/CDNs in front, webmock/vcr in the test suite, relevant backend
+        behavior (chunked, gzip, 1xx interim responses), etc.

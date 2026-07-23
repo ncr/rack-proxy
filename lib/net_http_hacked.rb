@@ -14,7 +14,7 @@
 # http://github.com/zerowidth/rack-streaming-proxy for an alternative that
 # used an additional process.
 
-require 'net/https'
+require "net/https"
 
 warn "[DEPRECATION] rack-proxy's net_http_hacked is deprecated and no longer used by " \
      "Rack::Proxy (streaming now uses the public Net::HTTP API). It will be removed in " \
@@ -56,9 +56,11 @@ class Net::HTTP
     # Skip ALL 1xx interim responses (100 Continue, 103 Early Hints, etc.), not
     # just 100 Continue, to reach the final response — matching modern net/http.
     # Otherwise a backend's 103 Early Hints is mistaken for the final response.
+    # standard:disable Lint/Loop -- deprecated legacy code, kept byte-faithful
     begin
       res = Net::HTTPResponse.read_new(@socket)
-    end while res.kind_of?(Net::HTTPInformation)
+    end while res.is_a?(Net::HTTPInformation)
+    # standard:enable Lint/Loop
     res.begin_reading_body_hacked(@socket, req.response_body_permitted?)
     @req_hacked, @res_hacked = req, res
     @res_hacked
@@ -91,7 +93,7 @@ class Net::HTTPResponse
   end
 
   def end_reading_body_hacked
-    self.body
+    body
     @socket = nil
   end
 end
@@ -100,12 +102,12 @@ end
 # internals the shim reaches into, instead of breaking mysteriously at call
 # time. Rack::Proxy itself is unaffected either way — its streaming uses the
 # public Net::HTTP API (lib/rack/http_streaming_response.rb).
-_rack_proxy_missing_net_http = %i[begin_transport end_transport edit_path].reject do |m|
+rack_proxy_missing_net_http = %i[begin_transport end_transport edit_path].reject do |m|
   Net::HTTP.private_method_defined?(m) || Net::HTTP.method_defined?(m)
 end
-_rack_proxy_missing_net_http << :read_new unless Net::HTTPResponse.respond_to?(:read_new, true)
-unless _rack_proxy_missing_net_http.empty?
-  warn "net_http_hacked: Net::HTTP internals #{_rack_proxy_missing_net_http.join(', ')} are " \
+rack_proxy_missing_net_http << :read_new unless Net::HTTPResponse.respond_to?(:read_new, true)
+unless rack_proxy_missing_net_http.empty?
+  warn "net_http_hacked: Net::HTTP internals #{rack_proxy_missing_net_http.join(", ")} are " \
        "missing on Ruby #{RUBY_VERSION}; this deprecated shim is broken here. Migrate to " \
        "Rack::Proxy's built-in streaming, which does not use these internals."
 end

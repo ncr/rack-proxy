@@ -6,13 +6,13 @@ class RackProxyTest < Test::Unit::TestCase
     attr_accessor :host
 
     def rewrite_env(env)
-      env["HTTP_HOST"] = self.host || 'example.com'
+      env["HTTP_HOST"] = host || "example.com"
       env
     end
   end
 
   def app(opts = {})
-    return @app ||= HostProxy.new(opts)
+    @app ||= HostProxy.new(opts)
   end
 
   def test_http_streaming
@@ -37,7 +37,7 @@ class RackProxyTest < Test::Unit::TestCase
     with_webrick_proxy(streaming: false) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
       get "/cookies/set?test=1"
-      assert !Array(last_response['Set-Cookie']).empty?, '/cookies/set should set a cookie'
+      assert !Array(last_response["Set-Cookie"]).empty?, "/cookies/set should set a cookie"
     end
   end
 
@@ -49,7 +49,7 @@ class RackProxyTest < Test::Unit::TestCase
   def test_https_streaming
     with_webrick_proxy(ssl: true, ssl_verify_none: true) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get 'https://example.com'
+      get "https://example.com"
       assert last_response.ok?
       assert_match(/Example Domain/, last_response.body)
     end
@@ -60,7 +60,7 @@ class RackProxyTest < Test::Unit::TestCase
   def test_https_streaming_tls
     with_webrick_proxy(ssl: true, ssl_verify_none: true, min_version: :TLS1_2) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get 'https://example.com'
+      get "https://example.com"
       assert last_response.ok?
       assert_match(/Example Domain/, last_response.body)
     end
@@ -69,7 +69,7 @@ class RackProxyTest < Test::Unit::TestCase
   def test_https_full_request
     with_webrick_proxy(ssl: true, streaming: false, ssl_verify_none: true) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get 'https://example.com'
+      get "https://example.com"
       assert last_response.ok?
       assert_match(/Example Domain/, last_response.body)
     end
@@ -78,7 +78,7 @@ class RackProxyTest < Test::Unit::TestCase
   def test_https_full_request_tls
     with_webrick_proxy(ssl: true, streaming: false, ssl_verify_none: true, ssl_version: :TLSv1_2) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get 'https://example.com'
+      get "https://example.com"
       assert last_response.ok?
       assert_match(/Example Domain/, last_response.body)
     end
@@ -86,13 +86,13 @@ class RackProxyTest < Test::Unit::TestCase
 
   def test_normalize_headers
     proxy_class = Rack::Proxy
-    headers = { 'header_array' => ['first_entry'], 'header_non_array' => :entry }
+    headers = {"header_array" => ["first_entry"], "header_non_array" => :entry}
 
     normalized_headers = proxy_class.send(:normalize_headers, headers)
     expected_class = Rack.const_defined?(:Headers) ? Rack::Headers : Rack::Utils::HeaderHash
     assert normalized_headers.instance_of?(expected_class)
-    assert normalized_headers['header_array'] == 'first_entry'
-    assert normalized_headers['header_non_array'] == :entry
+    assert normalized_headers["header_array"] == "first_entry"
+    assert normalized_headers["header_non_array"] == :entry
   end
 
   def test_header_reconstruction
@@ -108,31 +108,30 @@ class RackProxyTest < Test::Unit::TestCase
   def test_extract_http_request_headers
     proxy_class = Rack::Proxy
     env = {
-      'NOT-HTTP-HEADER' => 'test-value',
-      'HTTP_ACCEPT' => 'text/html',
-      'HTTP_CONNECTION' => nil,
-      'HTTP_CONTENT_MD5' => 'deadbeef',
-      'HTTP_HEADER.WITH.PERIODS' => 'stillmooing'
+      "NOT-HTTP-HEADER" => "test-value",
+      "HTTP_ACCEPT" => "text/html",
+      "HTTP_CONNECTION" => nil,
+      "HTTP_CONTENT_MD5" => "deadbeef",
+      "HTTP_HEADER.WITH.PERIODS" => "stillmooing"
     }
 
     headers = proxy_class.extract_http_request_headers(env)
-    assert headers.key?('ACCEPT')
-    assert headers.key?('CONTENT-MD5')
-    assert headers.key?('HEADER.WITH.PERIODS')
-    assert !headers.key?('CONNECTION')
-    assert !headers.key?('NOT-HTTP-HEADER')
+    assert headers.key?("ACCEPT")
+    assert headers.key?("CONTENT-MD5")
+    assert headers.key?("HEADER.WITH.PERIODS")
+    assert !headers.key?("CONNECTION")
+    assert !headers.key?("NOT-HTTP-HEADER")
   end
 
   def test_duplicate_headers
     proxy_class = Rack::Proxy
-    env = { 'Set-Cookie' => ["cookie1=foo", "cookie2=bar"] }
+    env = {"Set-Cookie" => ["cookie1=foo", "cookie2=bar"]}
 
     headers = proxy_class.normalize_headers(env)
-    assert headers['Set-Cookie'].include?('cookie1=foo'), "Include the first value"
-    assert headers['Set-Cookie'].include?("\n"), "Join multiple cookies with newlines"
-    assert headers['Set-Cookie'].include?('cookie2=bar'), "Include the second value"
+    assert headers["Set-Cookie"].include?("cookie1=foo"), "Include the first value"
+    assert headers["Set-Cookie"].include?("\n"), "Join multiple cookies with newlines"
+    assert headers["Set-Cookie"].include?("cookie2=bar"), "Include the second value"
   end
-
 
   def test_handles_missing_content_length
     assert_nothing_thrown do
@@ -165,9 +164,9 @@ class RackProxyTest < Test::Unit::TestCase
       assert !body.respond_to?(:rewind), "fixture must not be rewindable to exercise the guard"
 
       env = Rack::MockRequest.env_for("/echo-body", method: "POST")
-      env["rack.input"]     = body
+      env["rack.input"] = body
       env["CONTENT_LENGTH"] = "hello=world".bytesize.to_s
-      env["CONTENT_TYPE"]   = "text/plain"
+      env["CONTENT_TYPE"] = "text/plain"
 
       status, _headers, response = nil
       assert_nothing_raised { status, _headers, response = proxy.call(env) }
@@ -183,48 +182,48 @@ class RackProxyTest < Test::Unit::TestCase
   def test_response_header_included_Hop_by_hop
     with_webrick_proxy(streaming: true) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get '/chunked'
+      get "/chunked"
       # Assert on the headers actually emitted to the client (iteration), not
       # via #key?: Rack 2's HeaderHash#reject! leaves a stale case-insensitive
       # index, so #key? can report a header that iteration correctly omits.
       transfer_encoding_emitted =
-        last_response.headers.any? { |k, _| k.downcase == 'transfer-encoding' }
+        last_response.headers.any? { |k, _| k.downcase == "transfer-encoding" }
       assert !transfer_encoding_emitted,
-        'hop-by-hop Transfer-Encoding must be stripped from the proxied response'
-      assert_match(/chunk-one/, last_response.body, 'chunked body must still be forwarded')
+        "hop-by-hop Transfer-Encoding must be stripped from the proxied response"
+      assert_match(/chunk-one/, last_response.body, "chunked body must still be forwarded")
     end
   end
 
   # Issue #58: connection errors should return 502, not raise.
   def test_connection_refused_returns_502
     # Bind a socket to find a free port, then close it so connection is refused.
-    server = TCPServer.new('127.0.0.1', 0)
+    server = TCPServer.new("127.0.0.1", 0)
     closed_port = server.addr[1]
     server.close
 
-    app({:streaming => false}).host = "127.0.0.1:#{closed_port}"
-    get '/'
+    app({streaming: false}).host = "127.0.0.1:#{closed_port}"
+    get "/"
     assert_equal 502, last_response.status
-    assert_equal '', last_response.body
+    assert_equal "", last_response.body
   end
 
   def test_connection_refused_returns_502_streaming
-    server = TCPServer.new('127.0.0.1', 0)
+    server = TCPServer.new("127.0.0.1", 0)
     closed_port = server.addr[1]
     server.close
 
-    app({:streaming => true}).host = "127.0.0.1:#{closed_port}"
-    get '/'
+    app({streaming: true}).host = "127.0.0.1:#{closed_port}"
+    get "/"
     assert_equal 502, last_response.status
-    assert_equal '', last_response.body
+    assert_equal "", last_response.body
   end
 
   # `.invalid` is reserved (RFC 6761) and never resolves, so this stays
   # deterministic and offline: the SocketError from a failed DNS lookup must be
   # mapped to 502, not raised.
   def test_unknown_host_returns_502
-    app({:streaming => false}).host = 'no-such-host.invalid'
-    get '/'
+    app({streaming: false}).host = "no-such-host.invalid"
+    get "/"
     assert_equal 502, last_response.status
   end
 
@@ -233,18 +232,18 @@ class RackProxyTest < Test::Unit::TestCase
   def test_no_entity_body_for_204
     with_webrick_proxy(streaming: false) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get '/no-content'
+      get "/no-content"
       assert_equal 204, last_response.status
-      assert_equal '', last_response.body
+      assert_equal "", last_response.body
     end
   end
 
   def test_no_entity_body_for_304
     with_webrick_proxy(streaming: false) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get '/not-modified'
+      get "/not-modified"
       assert_equal 304, last_response.status
-      assert_equal '', last_response.body
+      assert_equal "", last_response.body
     end
   end
 
@@ -254,27 +253,106 @@ class RackProxyTest < Test::Unit::TestCase
   def test_no_entity_body_for_204_streaming
     with_webrick_proxy(streaming: true) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get '/no-content'
+      get "/no-content"
       assert_equal 204, last_response.status
-      assert_equal '', last_response.body
+      assert_equal "", last_response.body
     end
   end
 
   def test_no_entity_body_for_304_streaming
     with_webrick_proxy(streaming: true) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get '/not-modified'
+      get "/not-modified"
       assert_equal 304, last_response.status
-      assert_equal '', last_response.body
+      assert_equal "", last_response.body
     end
   end
 
   def test_head_request_streaming
     with_webrick_proxy(streaming: true) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      head '/'
+      head "/"
       assert last_response.ok?
-      assert_equal '', last_response.body, 'HEAD must not stream an entity body'
+      assert_equal "", last_response.body, "HEAD must not stream an entity body"
+    end
+  end
+
+  # P3-1: opt-in hardening. :strip_credentials must drop Cookie/Authorization
+  # from the forwarded request; without it both forward verbatim (standard
+  # proxy behavior, guarded here so neither direction regresses silently).
+  def test_strip_credentials_removes_cookie_and_authorization
+    with_webrick_proxy(strip_credentials: true) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get "/echo-request-headers", {},
+        "HTTP_COOKIE" => "session=s3cr3t", "HTTP_AUTHORIZATION" => "Bearer tok"
+      assert last_response.ok?
+      assert_not_match(/^cookie:/, last_response.body, "Cookie must be stripped")
+      assert_not_match(/^authorization:/, last_response.body, "Authorization must be stripped")
+    end
+  end
+
+  def test_credentials_forwarded_by_default
+    with_webrick_proxy do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get "/echo-request-headers", {},
+        "HTTP_COOKIE" => "session=s3cr3t", "HTTP_AUTHORIZATION" => "Bearer tok"
+      assert_match(/^cookie: session=s3cr3t$/, last_response.body)
+      assert_match(/^authorization: Bearer tok$/, last_response.body)
+    end
+  end
+
+  # P3-1: :replace_x_forwarded_for must hide the client-supplied chain and
+  # forward only this hop's REMOTE_ADDR; the default appends to the chain.
+  def test_replace_x_forwarded_for_hides_inbound_chain
+    with_webrick_proxy(replace_x_forwarded_for: true) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get "/echo-request-headers", {},
+        "HTTP_X_FORWARDED_FOR" => "203.0.113.9", "REMOTE_ADDR" => "10.0.0.5"
+      assert_match(/^x-forwarded-for: 10\.0\.0\.5$/, last_response.body,
+        "inbound X-Forwarded-For must be replaced with REMOTE_ADDR")
+    end
+  end
+
+  def test_x_forwarded_for_appends_by_default
+    with_webrick_proxy do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get "/echo-request-headers", {},
+        "HTTP_X_FORWARDED_FOR" => "203.0.113.9", "REMOTE_ADDR" => "10.0.0.5"
+      assert_match(/^x-forwarded-for: 203\.0\.113\.9, 10\.0\.0\.5$/, last_response.body)
+    end
+  end
+
+  # Pins the documented ordering: the strip runs on the extracted headers
+  # AFTER rewrite_env, so an Authorization injected there is stripped too —
+  # while the :username/:password credential survives (applied to the outgoing
+  # request after the strip). Proxy-owned credentials belong in those options.
+  def test_strip_credentials_applies_after_rewrite_env
+    with_webrick_proxy(strip_credentials: true, username: "u", password: "p") do |port, proxy|
+      def proxy.rewrite_env(env)
+        env["HTTP_AUTHORIZATION"] = "Bearer injected-by-rewrite-env"
+        super
+      end
+      proxy.host = "127.0.0.1:#{port}"
+      get "/echo-request-headers"
+      assert last_response.ok?
+      assert_not_match(/injected-by-rewrite-env/, last_response.body,
+        "a credential injected in rewrite_env is stripped like any other")
+      assert_match(/^authorization: Basic dTpw$/, last_response.body,
+        ":username/:password must survive strip_credentials")
+    end
+  end
+
+  # The REMOTE_ADDR-less arm of :replace_x_forwarded_for: with no peer address
+  # to substitute, the header must be dropped entirely, not sent empty.
+  def test_replace_x_forwarded_for_without_remote_addr_drops_header
+    with_webrick_proxy(replace_x_forwarded_for: true) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      env = Rack::MockRequest.env_for("/echo-request-headers")
+      env["HTTP_X_FORWARDED_FOR"] = "203.0.113.9"
+      env.delete("REMOTE_ADDR")
+      _status, _headers, body = proxy.call(env)
+      assert_not_match(/x-forwarded-for/, body.to_s,
+        "with no REMOTE_ADDR, X-Forwarded-For must be dropped, not forwarded or sent empty")
     end
   end
 
@@ -283,9 +361,9 @@ class RackProxyTest < Test::Unit::TestCase
   def test_post_body_is_forwarded_streaming
     with_webrick_proxy(streaming: true) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      post '/echo-body', 'hello=streaming-world'
+      post "/echo-body", "hello=streaming-world"
       assert last_response.ok?
-      assert_equal 'hello=streaming-world', last_response.body
+      assert_equal "hello=streaming-world", last_response.body
     end
   end
 
@@ -310,9 +388,9 @@ class RackProxyTest < Test::Unit::TestCase
   def test_empty_body_is_not_array_with_empty_string
     with_webrick_proxy(streaming: false) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get '/empty'
+      get "/empty"
       assert_equal 200, last_response.status
-      assert_equal '', last_response.body
+      assert_equal "", last_response.body
     end
   end
 
@@ -353,9 +431,9 @@ class RackProxyTest < Test::Unit::TestCase
     sink = StringIO.new
     with_webrick_proxy(ssl: true, streaming: false, logger: sink) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get 'https://example.com/'
+      get "https://example.com/"
       assert_equal 502, last_response.status,
-        'a backend cert failing VERIFY_PEER must become 502, not a raised 500'
+        "a backend cert failing VERIFY_PEER must become 502, not a raised 500"
       assert_match(/SSLError|certificate verify failed/, sink.string,
         "expected the 502 to be caused by a TLS verification failure, got: #{sink.string.inspect}")
     end
@@ -367,7 +445,7 @@ class RackProxyTest < Test::Unit::TestCase
     sink = StringIO.new
     with_webrick_proxy(ssl: true, streaming: true, logger: sink) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get 'https://example.com/'
+      get "https://example.com/"
       assert_equal 502, last_response.status
       assert_match(/SSLError|certificate verify failed/, sink.string)
     end
@@ -376,7 +454,7 @@ class RackProxyTest < Test::Unit::TestCase
   def test_https_with_ssl_verify_none_accepts_invalid_certificate
     with_webrick_proxy(ssl: true, streaming: false, ssl_verify_none: true) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get 'https://example.com/'
+      get "https://example.com/"
       assert last_response.ok?
     end
   end
@@ -387,8 +465,8 @@ class RackProxyTest < Test::Unit::TestCase
   def test_https_ca_file_accepts_trusted_cert_non_streaming
     with_webrick_proxy(ssl: true, ca_signed: true, streaming: false, ca_file: ProxyTestServer.ca_file) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get 'https://example.com/'
-      assert last_response.ok?, 'VERIFY_PEER must accept a cert signed by the configured ca_file'
+      get "https://example.com/"
+      assert last_response.ok?, "VERIFY_PEER must accept a cert signed by the configured ca_file"
       assert_match(/Example Domain/, last_response.body)
     end
   end
@@ -396,7 +474,7 @@ class RackProxyTest < Test::Unit::TestCase
   def test_https_ca_file_accepts_trusted_cert_streaming
     with_webrick_proxy(ssl: true, ca_signed: true, streaming: true, ca_file: ProxyTestServer.ca_file) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get 'https://example.com/'
+      get "https://example.com/"
       assert last_response.ok?
       assert_match(/Example Domain/, last_response.body)
     end
@@ -407,7 +485,7 @@ class RackProxyTest < Test::Unit::TestCase
   def test_https_ca_signed_cert_rejected_without_ca_file
     with_webrick_proxy(ssl: true, ca_signed: true, streaming: false) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get 'https://example.com/'
+      get "https://example.com/"
       assert_equal 502, last_response.status
     end
   end
@@ -439,7 +517,7 @@ class RackProxyTest < Test::Unit::TestCase
     sink = StringIO.new
     with_webrick_proxy(streaming: false, logger: sink) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get '/empty'
+      get "/empty"
       assert last_response.ok?
     end
     assert_match(/GET \/empty/, sink.string,
@@ -450,7 +528,7 @@ class RackProxyTest < Test::Unit::TestCase
     sink = StringIO.new
     with_webrick_proxy(streaming: true, logger: sink) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get '/empty'
+      get "/empty"
       assert last_response.ok?
     end
     assert_match(/GET \/empty/, sink.string,
@@ -463,7 +541,7 @@ class RackProxyTest < Test::Unit::TestCase
     Object.send(:remove_const, :Headers) if Object.const_defined?(:Headers, false)
     Object.const_set(:Headers, Class.new)
     begin
-      result = Rack::Proxy.send(:build_header_hash, [['X-Test', 'value']])
+      result = Rack::Proxy.send(:build_header_hash, [["X-Test", "value"]])
       # On Rack 3+ we get Rack::Headers; on Rack 2 we get Rack::Utils::HeaderHash.
       # In neither case should we get the bogus top-level ::Headers.
       assert_not_equal ::Headers, result.class,
@@ -479,7 +557,7 @@ class RackProxyTest < Test::Unit::TestCase
     # work when no logger is configured (covered by every other test).
     with_webrick_proxy(streaming: false) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get '/empty'
+      get "/empty"
       assert last_response.ok?
     end
   end
@@ -488,25 +566,25 @@ class RackProxyTest < Test::Unit::TestCase
   # stripped from the FORWARDED REQUEST, closing the CL/TE smuggling surface.
   def test_request_hop_by_hop_headers_are_stripped
     env = {
-      'REMOTE_ADDR'            => '10.0.0.1',
-      'HTTP_ACCEPT'            => 'text/html',
-      'HTTP_CONNECTION'        => 'keep-alive, X-Purge-Me',
-      'HTTP_KEEP_ALIVE'        => 'timeout=5',
-      'HTTP_TE'                => 'trailers',
-      'HTTP_TRANSFER_ENCODING' => 'chunked',
-      'HTTP_PROXY_AUTHORIZATION' => 'Basic zzz',
-      'HTTP_UPGRADE'           => 'websocket',
-      'HTTP_X_PURGE_ME'        => 'please',
-      'HTTP_AUTHORIZATION'     => 'Bearer keep-me'
+      "REMOTE_ADDR" => "10.0.0.1",
+      "HTTP_ACCEPT" => "text/html",
+      "HTTP_CONNECTION" => "keep-alive, X-Purge-Me",
+      "HTTP_KEEP_ALIVE" => "timeout=5",
+      "HTTP_TE" => "trailers",
+      "HTTP_TRANSFER_ENCODING" => "chunked",
+      "HTTP_PROXY_AUTHORIZATION" => "Basic zzz",
+      "HTTP_UPGRADE" => "websocket",
+      "HTTP_X_PURGE_ME" => "please",
+      "HTTP_AUTHORIZATION" => "Bearer keep-me"
     }
     headers = Rack::Proxy.extract_http_request_headers(env)
 
     %w[Connection Keep-Alive Te Transfer-Encoding Proxy-Authorization Upgrade].each do |h|
       assert !headers.key?(h), "#{h} is hop-by-hop and must not be forwarded"
     end
-    assert !headers.key?('X-Purge-Me'), 'a header named in Connection must be dropped'
-    assert_equal 'text/html', headers['Accept'], 'end-to-end headers must survive'
-    assert_equal 'Bearer keep-me', headers['Authorization'], 'end-to-end Authorization must survive'
+    assert !headers.key?("X-Purge-Me"), "a header named in Connection must be dropped"
+    assert_equal "text/html", headers["Accept"], "end-to-end headers must survive"
+    assert_equal "Bearer keep-me", headers["Authorization"], "end-to-end Authorization must survive"
   end
 
   # P0-6: a gzip-encoded backend body must be forwarded verbatim (still
@@ -536,7 +614,9 @@ class RackProxyTest < Test::Unit::TestCase
   # is reachable and would otherwise succeed.
   def test_disallowed_backend_returns_502
     with_webrick_proxy(streaming: false) do |port, proxy|
-      def proxy.backend_allowed?(_backend); false; end
+      def proxy.backend_allowed?(_backend)
+        false
+      end
       proxy.host = "127.0.0.1:#{port}"
       get "/"
       assert_equal 502, last_response.status
@@ -546,7 +626,7 @@ class RackProxyTest < Test::Unit::TestCase
   def test_backend_allowed_by_default
     proxy = Rack::Proxy.new
     assert proxy.send(:backend_allowed?, URI("http://198.51.100.7:80")),
-      'default must allow any backend for backward compatibility'
+      "default must allow any backend for backward compatibility"
   end
 
   # P0-5: an interim 103 Early Hints from the backend must be skipped so the
@@ -557,8 +637,8 @@ class RackProxyTest < Test::Unit::TestCase
       @app = proxy
       proxy.host = "127.0.0.1:#{port}"
       get "/"
-      assert_equal 200, last_response.status.to_i, 'must return the final 200, not the interim 103'
-      assert_equal 'hello world', last_response.body
+      assert_equal 200, last_response.status.to_i, "must return the final 200, not the interim 103"
+      assert_equal "hello world", last_response.body
     end
   ensure
     @app = nil
@@ -609,13 +689,13 @@ class RackProxyTest < Test::Unit::TestCase
       get "/gzip"
       assert last_response.ok?
       body = last_response.body
-      assert_equal 'gzip', last_response['content-encoding'], 'Content-Encoding must be preserved'
+      assert_equal "gzip", last_response["content-encoding"], "Content-Encoding must be preserved"
       inflated = Zlib::GzipReader.new(StringIO.new(body.b)).read
       assert_equal ProxyTestServer::GZIP_PLAINTEXT.b, inflated.b,
-        'body must still be compressed and round-trip to the original payload'
-      if (content_length = last_response['content-length'])
+        "body must still be compressed and round-trip to the original payload"
+      if (content_length = last_response["content-length"])
         assert_equal body.bytesize, content_length.to_i,
-          'Content-Length must match the (compressed) bytes actually forwarded'
+          "Content-Length must match the (compressed) bytes actually forwarded"
       end
     end
   end
@@ -664,14 +744,13 @@ class RackProxyTest < Test::Unit::TestCase
   def assert_no_array_header_values(streaming:)
     with_webrick_proxy(streaming: streaming) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      get '/echo-headers'
+      get "/echo-headers"
       array_valued = last_response.headers.select { |_, v| v.is_a?(Array) }
       assert_empty array_valued,
         "expected no Array-valued headers (#65), got: #{array_valued.inspect}"
-      assert_equal 'value-here', last_response['x-custom']
+      assert_equal "value-here", last_response["x-custom"]
     end
   end
-
 
   # Spin up a tiny local WEBrick server (see test/support/proxy_test_server.rb)
   # so we can exercise the proxy against real Net::HTTP requests without touching
