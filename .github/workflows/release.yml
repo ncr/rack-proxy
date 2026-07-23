@@ -40,3 +40,22 @@ jobs:
             exit 1
           fi
       - uses: rubygems/release-gem@v1
+        with:
+          # The action's bundled await polls rubygems' full index, which can
+          # lag far past the poller's ~5-minute timeout and fail the run after
+          # a successful publish (v1.0.0 and v1.0.1 both hit this). We verify
+          # against the fast versions API in the next step instead.
+          await-release: "false"
+      - name: Verify the release is live on rubygems.org
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for _ in $(seq 1 30); do
+            if curl -sf "https://rubygems.org/api/v1/versions/rack-proxy.json" |
+                jq -e --arg v "$version" 'any(.[]; .number == $v)' > /dev/null; then
+              echo "rack-proxy $version is live on rubygems.org"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "rack-proxy $version not visible on rubygems.org after 5 minutes" >&2
+          exit 1
