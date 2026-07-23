@@ -19,7 +19,7 @@ Installation
 Add the following to your `Gemfile`:
 
 ```
-gem 'rack-proxy', '~> 0.8.0'
+gem 'rack-proxy', '~> 1.0'
 ```
 
 Or install:
@@ -50,7 +50,8 @@ Options
 Options can be set when initializing the middleware or overriding a method.
 
 * `:streaming` - stream the backend response as it arrives (default `true`). Set to `false` to buffer the whole response before returning it (also recommended under `webmock`/`vcr` — see [Compatibility notes](#compatibility-notes)).
-* `:backend` - URI (or URI-parseable string) of the backend host/port/scheme to proxy to. If not set, the destination is derived from the incoming request's `Host` — see [Security considerations](#security-considerations).
+* `:backend` - URI (or URI-parseable string) of the backend host/port/scheme to proxy to. If not set, the destination is derived from the incoming request's `Host` — which is **refused by default** since 1.0; see `:allow_dynamic_backend` and [Security considerations](#security-considerations).
+* `:allow_dynamic_backend` - opt in (`true`) to deriving the destination from the client-supplied `Host` header when no `:backend` is configured. Off by default (such requests get `502`), because a bare dynamic proxy is an open proxy. Combine with a `backend_allowed?` allowlist.
 * `:read_timeout` - per-read timeout in seconds (default `60`).
 * `:open_timeout` - connection-open timeout in seconds.
 * `:write_timeout` - per-write timeout in seconds.
@@ -83,7 +84,7 @@ Security considerations
 
 rack-proxy forwards attacker-influenced requests to a backend and relays the backend's response. Configure and subclass it with that in mind.
 
-* **SSRF / open proxy.** If you do **not** set `:backend`, the destination host/port/scheme is derived from the incoming request's `Host` / `X-Forwarded-Host` header. A bare `Rack::Proxy.new` will therefore proxy to *any* host a client names — including cloud metadata endpoints (`169.254.169.254`), loopback, and private ranges. Either set a fixed `:backend`, or override `backend_allowed?(backend)` to allowlist expected hosts:
+* **SSRF / open proxy — safe by default since 1.0.** If you do **not** set `:backend`, the destination host/port/scheme would be derived from the incoming request's `Host` / `X-Forwarded-Host` header — meaning a client could steer the proxy at *any* host, including cloud metadata endpoints (`169.254.169.254`), loopback, and private ranges. Such requests are now refused with `502` unless you pass `allow_dynamic_backend: true`. When you do opt in, pin an allowlist on top by overriding `backend_allowed?(backend)` (consulted for every request, static backends included):
 
     ```ruby
     class MyProxy < Rack::Proxy
@@ -93,9 +94,11 @@ rack-proxy forwards attacker-influenced requests to a backend and relays the bac
         ALLOWED.include?(backend.host)
       end
     end
+
+    MyProxy.new(allow_dynamic_backend: true)
     ```
 
-    A refused backend is answered with `502`. (Making dynamic, `Host`-derived backends opt-in by default is planned for a future major version.)
+    A refused backend is answered with `502` (with a hint in the `:logger` output).
 
 * **Credential forwarding.** All incoming `HTTP_*` headers are forwarded, including `Authorization` and `Cookie`. Don't proxy to a different trust domain with credentials attached — pass `strip_credentials: true` to drop both (or do finer-grained filtering in `rewrite_env`). Over an `http://` backend these travel in cleartext.
 
@@ -169,8 +172,11 @@ class TrustingProxy < Rack::Proxy
   end
 end
 
-# Pass ssl_verify_none: true to skip TLS certificate verification.
-Rack::Proxy.new(ssl_verify_none: true)
+# Mount it with an explicit backend (dynamic Host-derived backends are refused
+# by default since 1.0). Pass ssl_verify_none: true to skip TLS verification.
+Rails.application.config.middleware.use TrustingProxy,
+  backend: "https://self-signed.badssl.com",
+  ssl_verify_none: true
 ```
 
 ### Rails middleware example
@@ -185,7 +191,7 @@ From [`examples/example_service_proxy.rb`](examples/example_service_proxy.rb):
 # 1. rails new test_app
 # 2. cd test_app
 # 3. install Rack-Proxy in `Gemfile`
-#    a. `gem 'rack-proxy', '~> 0.8.0'`
+#    a. `gem 'rack-proxy', '~> 1.0'`
 # 4. install gem: `bundle install`
 # 5. copy the class into your app and mount it from `config/initializers/proxy.rb`
 # 6. run: `SERVICE_URL=http://guides.rubyonrails.org rails server`
@@ -266,14 +272,14 @@ To use the middleware, please consider the following:
 1) For Rails we could add a configuration in `config/application.rb`
 
 ```ruby
-  config.middleware.use RackPhpProxy, {ssl_verify_none: true}
+  config.middleware.use RackPhpProxy, backend: "http://php.net", ssl_verify_none: true
 ```
 
 2) For Sinatra or any Rack-based application:
 
 ```ruby
 class MyAwesomeSinatra < Sinatra::Base
-   use  RackPhpProxy, {ssl_verify_none: true}
+   use RackPhpProxy, backend: "http://php.net", ssl_verify_none: true
 end
 ```
 
@@ -359,7 +365,7 @@ key_raw = File.read('./certs/key.pem')
 cert = OpenSSL::X509::Certificate.new(cert_raw)
 key = OpenSSL::PKey.read(key_raw)
 
-use TLSProxy, cert: cert, key: key, verify_mode: OpenSSL::SSL::VERIFY_PEER, min_version: :TLS1_2
+use TLSProxy, backend: "https://client-tls-auth-api.com", cert: cert, key: key, verify_mode: OpenSSL::SSL::VERIFY_PEER, min_version: :TLS1_2
 ```
 
 And rewrite host for example:
@@ -377,6 +383,32 @@ end
 
 Upgrading
 ----
+
+### 0.8.x → 1.0.0
+
+1.0.0 is a breaking release; the full list is in [CHANGELOG.md](CHANGELOG.md). The changes most likely to need action:
+
+**Host-derived backends now require an explicit opt-in.** If you rely on the destination being derived from the request's `Host` header (no `:backend` option — this includes every subclass that routes by rewriting `env["HTTP_HOST"]`), such requests now return `502`. Restore the behavior explicitly, ideally with an allowlist:
+
+```ruby
+class MyProxy < Rack::Proxy
+  def backend_allowed?(backend)
+    %w[api.internal.example.com].include?(backend.host)
+  end
+end
+
+MyProxy.new(allow_dynamic_backend: true)
+```
+
+Deployments with a fixed `:backend` (or that set `env["rack.backend"]` in `rewrite_env`) need no change.
+
+**Backend failures return `502` instead of raising.** If you rescued `OpenSSL::SSL::SSLError`, `Errno::ECONNREFUSED`, timeouts, etc. around the proxy, inspect the response status instead. Malformed request URIs map to `400` and unknown HTTP methods to `501`.
+
+**`require "rack_proxy_examples/..."` is gone.** The examples are copy-paste snippets in [`examples/`](examples/) now — copy the class into your app and mount it yourself.
+
+**`net_http_hacked` is gone.** The library streams via the public `Net::HTTP` API; if external code called `begin_request_hacked`/`end_request_hacked`, vendor the old file from a 0.8.x release and plan a migration.
+
+**Other behavior changes to be aware of:** hop-by-hop request headers (including `Proxy-Authorization`) are no longer forwarded; gzip bodies are forwarded still-compressed in `streaming: false` mode (inflate in `rewrite_response` if you inspect body text); body-less POST/PUT sends `Content-Length: 0`; Ruby >= 3.0 and Rack 2.x–3.x are required.
 
 ### 0.7.x → 0.8.0
 

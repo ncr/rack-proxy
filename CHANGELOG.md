@@ -6,19 +6,56 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-This entry collects the 2026 modernization + security-hardening work (see
-`MODERNIZATION_PLAN.md`). It is not yet released.
+Nothing yet.
+
+## [1.0.0] - 2026-07-18
+
+The 2026 modernization + security-hardening release (see
+`MODERNIZATION_PLAN.md`). From 1.0.0 on this project follows SemVer strictly:
+breaking changes only in majors.
+
+### Breaking changes
+
+Read this list before upgrading from 0.8.x; everything else below is additive
+or a compatible fix. See the README's "Upgrading" section for migration steps.
+
+- **Host-derived (dynamic) backends are refused by default.** With no
+  `:backend` and no `env["rack.backend"]`, requests now get `502` unless you
+  pass `allow_dynamic_backend: true`. A bare `Rack::Proxy.new` is no longer an
+  open proxy. Combine the opt-in with a `backend_allowed?` allowlist.
+- **`net_http_hacked` is gone** — the file, `require "net_http_hacked"`, and
+  the `begin_request_hacked`/`end_request_hacked` methods (see Removed).
+- **The bundled examples left the gem** — `require "rack_proxy_examples/..."`
+  raises `LoadError`; copy the snippets from `examples/` instead (see Removed).
+- **Backend failures no longer raise.** `OpenSSL::SSL::SSLError`, `EOFError`,
+  timeouts, resets, and malformed backend responses now become a `502` triplet
+  instead of an exception — `rescue`-based error handling around `proxy.call`
+  must inspect the status instead.
+- **Hop-by-hop request headers are no longer forwarded** (`Connection`, `TE`,
+  `Transfer-Encoding`, `Proxy-Authorization`, `Upgrade`, anything named by
+  `Connection`).
+- **gzip backend bodies are forwarded verbatim in `streaming: false` mode**
+  (previously they were transparently inflated); `rewrite_response` hooks that
+  read body text must inflate it themselves.
+- **Supported runtimes: Ruby >= 3.0 and Rack >= 2.0, < 4** (was Ruby >= 2.6,
+  rack unpinned).
+- Smaller wire/API changes: body-less POST/PUT sends `Content-Length: 0` on
+  the streaming path; the streaming body is thread-affine (iterate it on the
+  thread that called the app, as mainstream servers do); `HttpStreamingResponse`
+  raises `IOError` on use-after-close; early termination closes the backend
+  connection instead of draining it.
 
 ### Security
 
+- Refuse Host-derived backends unless `allow_dynamic_backend: true` is set
+  (see Breaking changes) — closes the default open-proxy/SSRF pivot.
 - Strip hop-by-hop headers from the **forwarded request** (Connection, TE,
   Transfer-Encoding, Proxy-Authorization, …, plus any header named by the inbound
   `Connection` header), closing a Content-Length/Transfer-Encoding request-smuggling
   surface. Hop-by-hop headers were previously stripped only from the response.
-- Add `backend_allowed?(backend)` — an overridable SSRF guardrail. It defaults to
-  allowing any backend (backward compatible); override it to allowlist expected
-  hosts when the destination is derived from the client `Host` header. A refused
-  backend responds `502`.
+- Add `backend_allowed?(backend)` — an overridable per-request allowlist hook,
+  consulted for every request (static backends included). A refused backend
+  responds `502`.
 - Add `:max_response_length` to cap the backend response size (bounds memory
   against a hostile/huge backend). Enforced incrementally while streaming.
 - Add `:ca_file` / `:cert_store` so private-CA backends can be verified under the
@@ -73,11 +110,15 @@ This entry collects the 2026 modernization + security-hardening work (see
 ### Deprecated
 
 - `:ssl_version` — use `:min_version` / `:max_version`.
-- `require "net_http_hacked"` — the monkey-patch is no longer used by the
-  library. The file remains as a functional shim that warns on require, and
-  will be removed in a future release.
 
 ### Removed
+
+- `lib/net_http_hacked.rb` — the 2010-era monkey-patch of private `Net::HTTP`
+  internals. The library stopped using it when streaming moved to the public
+  `Net::HTTP` API (see Changed); `require "net_http_hacked"` and the
+  `begin_request_hacked` / `end_request_hacked` methods are gone. If external
+  code still depends on them, vendor the file from a 0.8.x release — and plan
+  to migrate; it breaks under modern net/http refactors.
 
 - The bundled examples moved from the gem load path
   (`lib/rack_proxy_examples/`) to [`examples/`](examples/) in the repository.
@@ -123,7 +164,8 @@ This entry collects the 2026 modernization + security-hardening work (see
 
 Older releases (≤ 0.7.8) predate this changelog; see the git history and tags.
 
-[Unreleased]: https://github.com/ncr/rack-proxy/compare/v0.8.3...HEAD
+[Unreleased]: https://github.com/ncr/rack-proxy/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/ncr/rack-proxy/compare/v0.8.3...v1.0.0
 [0.8.3]: https://github.com/ncr/rack-proxy/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/ncr/rack-proxy/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/ncr/rack-proxy/compare/v0.8.0...v0.8.1

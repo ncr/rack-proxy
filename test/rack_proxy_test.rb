@@ -11,8 +11,11 @@ class RackProxyTest < Test::Unit::TestCase
     end
   end
 
+  # HostProxy routes by rewriting the Host header (dynamic mode), which is
+  # refused by default since 1.0 — the helpers opt in so the suite can exercise
+  # the network paths. The refusal default has its own guards below.
   def app(opts = {})
-    @app ||= HostProxy.new(opts)
+    @app ||= HostProxy.new({allow_dynamic_backend: true}.merge(opts))
   end
 
   def test_http_streaming
@@ -373,7 +376,7 @@ class RackProxyTest < Test::Unit::TestCase
   def test_malformed_backend_response_returns_502
     [true, false].each do |streaming|
       with_malformed_backend do |port|
-        proxy = HostProxy.new(streaming: streaming)
+        proxy = HostProxy.new(streaming: streaming, allow_dynamic_backend: true)
         @app = proxy
         proxy.host = "127.0.0.1:#{port}"
         get "/"
@@ -623,17 +626,108 @@ class RackProxyTest < Test::Unit::TestCase
     end
   end
 
-  def test_backend_allowed_by_default
+  # 1.0 BREAKING / SSRF guard: with no :backend and no opt-in, a Host-derived
+  # destination must be refused with 502 — even when it would be reachable —
+  # and the refusal must be dialed nowhere (the backend sees no request).
+  def test_dynamic_backend_refused_by_default
+    server, port = ProxyTestServer.start_server
+    hits = 0
+    server.mount_proc("/hit-counter") do |_req, res|
+      hits += 1
+      res.body = "hit"
+    end
+
+    sink = StringIO.new
+    proxy = HostProxy.new(logger: sink) # deliberately NOT allow_dynamic_backend
+    @app = proxy
+    proxy.host = "127.0.0.1:#{port}"
+    get "/hit-counter"
+
+    assert_equal 502, last_response.status
+    assert_equal 0, hits, "a refused dynamic backend must never be dialed"
+    assert_match(/allow_dynamic_backend/, sink.string,
+      "the refusal should log a migration hint")
+  ensure
+    server&.shutdown
+    @app = nil
+  end
+
+  # A configured :backend is app-controlled and needs no opt-in.
+  def test_static_backend_requires_no_opt_in
+    server, port = ProxyTestServer.start_server
+    proxy = Rack::Proxy.new(backend: "http://127.0.0.1:#{port}")
+    status, _headers, body = proxy.call(Rack::MockRequest.env_for("/"))
+    assert_equal 200, status.to_i
+    assert_match(/Example Domain/, body.to_s)
+  ensure
+    server&.shutdown
+  end
+
+  # env["rack.backend"] is set by the app's own rewrite_env — also trusted.
+  def test_rack_backend_env_requires_no_opt_in
+    server, port = ProxyTestServer.start_server
     proxy = Rack::Proxy.new
-    assert proxy.send(:backend_allowed?, URI("http://198.51.100.7:80")),
-      "default must allow any backend for backward compatibility"
+    env = Rack::MockRequest.env_for("/")
+    env["rack.backend"] = URI("http://127.0.0.1:#{port}")
+    status, _headers, body = proxy.call(env)
+    assert_equal 200, status.to_i
+    assert_match(/Example Domain/, body.to_s)
+  ensure
+    server&.shutdown
+  end
+
+  # A URI-parseable String rack.backend is accepted too (symmetric with the
+  # :backend option) rather than crashing on #scheme with an uncaught 500.
+  def test_rack_backend_env_accepts_string
+    server, port = ProxyTestServer.start_server
+    proxy = Rack::Proxy.new
+    env = Rack::MockRequest.env_for("/")
+    env["rack.backend"] = "http://127.0.0.1:#{port}"
+    status = nil
+    assert_nothing_raised { status, = proxy.call(env) }
+    assert_equal 200, status.to_i
+  ensure
+    server&.shutdown
+  end
+
+  # backend_allowed? must be consulted for static backends too, not just
+  # dynamic ones — it is the fine-grained allowlist on top of the mode gate —
+  # and the refusal should log a hint for operators debugging the 502.
+  def test_backend_allowed_consulted_for_static_backend
+    server, port = ProxyTestServer.start_server
+    sink = StringIO.new
+    proxy = Rack::Proxy.new(backend: "http://127.0.0.1:#{port}", logger: sink)
+    def proxy.backend_allowed?(_backend) = false
+    status, _headers, _body = proxy.call(Rack::MockRequest.env_for("/"))
+    assert_equal 502, status
+    assert_match(/refused by backend_allowed\?/, sink.string)
+  ensure
+    server&.shutdown
+  end
+
+  # The library must load standalone and must NOT define the old
+  # net_http_hacked monkey-patch (deleted in 1.0) — guards reintroduction.
+  # Runs in a subprocess so this file's own requires can't mask a regression.
+  # Assert on markers rather than exact output: the subprocess inherits the
+  # bundler env, which may print unrelated warnings on some machines.
+  def test_library_loads_cleanly_without_the_old_monkey_patch
+    lib = File.expand_path("../lib", __dir__)
+    out = IO.popen(
+      [RbConfig.ruby, "-I", lib, "-e",
+        'require "rack/proxy"; print Net::HTTP.method_defined?(:begin_request_hacked) ? "PATCHED" : "CLEAN"'],
+      err: [:child, :out], &:read
+    )
+    assert_match(/CLEAN\z/, out,
+      "requiring rack/proxy must not define the old net_http_hacked methods; got: #{out.inspect}")
+    assert_not_match(/net_http_hacked|DEPRECATION/, out,
+      "requiring rack/proxy must not load or warn about the deleted shim")
   end
 
   # P0-5: an interim 103 Early Hints from the backend must be skipped so the
   # final 200 (and its body) is returned, on the default streaming path.
   def test_early_hints_103_is_skipped_streaming
     with_early_hints_backend do |port|
-      proxy = HostProxy.new(streaming: true)
+      proxy = HostProxy.new(streaming: true, allow_dynamic_backend: true)
       @app = proxy
       proxy.host = "127.0.0.1:#{port}"
       get "/"
@@ -760,7 +854,7 @@ class RackProxyTest < Test::Unit::TestCase
   def with_webrick_proxy(ssl: false, ca_signed: false, **proxy_opts)
     server, port = ProxyTestServer.start_server(ssl: ssl, ca_signed: ca_signed)
 
-    proxy = HostProxy.new(**proxy_opts)
+    proxy = HostProxy.new(allow_dynamic_backend: true, **proxy_opts)
     @app = proxy
     yield port, proxy
   ensure

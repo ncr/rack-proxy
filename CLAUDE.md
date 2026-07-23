@@ -26,7 +26,7 @@ The default suite must never touch the network. CI (`.github/workflows/ci.yml`)
 runs the matrix Ruby 3.1–3.4 × Rack 2/3, a `ruby head` canary, a gem-build
 smoke test, and a blocking lint job (standardrb + coverage floor + bundler-audit).
 
-## Architecture (two core files + a deprecated shim, ~500 lines)
+## Architecture (two core files, ~460 lines)
 
 - **`lib/rack/proxy.rb`** — `Rack::Proxy`. The entry point: `call` →
   `rewrite_env` → `perform_request` → `rewrite_response`. `perform_request`
@@ -41,10 +41,10 @@ smoke test, and a blocking lint job (standardrb + coverage floor + bundler-audit
   headers are in, and `#each` resumes it to pull body chunks; `#each`/`#close`
   tear the connection down (early termination unwinds the Fiber via
   `Fiber#raise`).
-- **`lib/net_http_hacked.rb`** — the *former* streaming engine: a monkey-patch
-  of private `Net::HTTP` internals, now a **deprecated shim** kept for one
-  release for external requirers. Nothing in the library loads it anymore; it
-  warns on require. Don't build anything new on it.
+- `lib/net_http_hacked.rb` — the *former* streaming engine (a monkey-patch of
+  private `Net::HTTP` internals) — was **deleted in 1.0**. Do not reintroduce
+  it or anything like it; a subprocess test asserts the library loads without
+  defining the old hacked methods.
 
 ## Invariants — do not regress these (each has a guarding test)
 
@@ -92,9 +92,12 @@ smoke test, and a blocking lint job (standardrb + coverage floor + bundler-audit
   `test/live_smoke_test.rb`.
 - **Keep the test framework as `test-unit`.** Do not migrate to RSpec/Minitest as
   a side effect of other work.
-- **The default backend is the client's own `Host` header** when no `:backend`
-  is configured (`perform_request`). This is intentional but an SSRF footgun;
-  hardening is tracked in MODERNIZATION_PLAN P0-4. Don't widen this behavior.
+- **Dynamic (Host-derived) backends are refused by default since 1.0** — with
+  no `:backend` and no `env["rack.backend"]`, requests 502 unless
+  `allow_dynamic_backend: true` was passed. This is a security invariant, not a
+  bug: never "fix" a 502 here by defaulting the option on or by falling back to
+  `source_request` silently. Guards: `test_dynamic_backend_refused_by_default`,
+  `test_static_backend_requires_no_opt_in`, `test_rack_backend_env_requires_no_opt_in`.
 
 ## Security posture
 

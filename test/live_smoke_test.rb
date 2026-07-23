@@ -6,9 +6,9 @@ require "rack/proxy"
 #
 #   LIVE=1 bundle exec rake test
 #
-# They preserve the one thing the offline suite cannot yet assert: that the
-# default VERIFY_PEER accepts a genuinely trusted public certificate. Once the
-# planned :ca_file option lands, that check moves into the hermetic suite.
+# They add the one check the offline suite cannot express: that the default
+# VERIFY_PEER accepts a certificate trusted by the SYSTEM trust store (the
+# hermetic :ca_file tests cover VERIFY_PEER success against the test CA).
 class LiveSmokeTest < Test::Unit::TestCase
   class HostProxy < Rack::Proxy
     attr_accessor :host
@@ -20,7 +20,7 @@ class LiveSmokeTest < Test::Unit::TestCase
   end
 
   def app
-    @app ||= HostProxy.new(streaming: false)
+    @app ||= HostProxy.new(streaming: false, allow_dynamic_backend: true)
   end
 
   def setup
