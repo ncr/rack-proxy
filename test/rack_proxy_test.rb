@@ -285,12 +285,30 @@ class RackProxyTest < Test::Unit::TestCase
 
   # The local HTTPS server uses a self-signed cert, so the default VERIFY_PEER
   # must reject it. This is the hermetic replacement for the old badssl.com test
-  # and is now the primary regression guard for the VERIFY_PEER default.
+  # and is now the primary regression guard for the VERIFY_PEER default. Since
+  # Batch 2 maps backend failures to 502 (rather than raising), we assert 502 and
+  # use the logger to confirm the cause is specifically a TLS verification error.
   def test_https_default_rejects_invalid_certificate
-    with_webrick_proxy(ssl: true, streaming: false) do |port, proxy|
+    sink = StringIO.new
+    with_webrick_proxy(ssl: true, streaming: false, logger: sink) do |port, proxy|
       proxy.host = "127.0.0.1:#{port}"
-      error = assert_raise(OpenSSL::SSL::SSLError) { get 'https://example.com/' }
-      assert_match(/certificate verify failed/, error.message)
+      get 'https://example.com/'
+      assert_equal 502, last_response.status,
+        'a backend cert failing VERIFY_PEER must become 502, not a raised 500'
+      assert_match(/SSLError|certificate verify failed/, sink.string,
+        "expected the 502 to be caused by a TLS verification failure, got: #{sink.string.inspect}")
+    end
+  end
+
+  # Same guard for the default (streaming) path, which previously had no
+  # VERIFY_PEER coverage at all (P1-4 deduped the TLS config into one place).
+  def test_https_default_rejects_invalid_certificate_streaming
+    sink = StringIO.new
+    with_webrick_proxy(ssl: true, streaming: true, logger: sink) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get 'https://example.com/'
+      assert_equal 502, last_response.status
+      assert_match(/SSLError|certificate verify failed/, sink.string)
     end
   end
 
@@ -353,7 +371,125 @@ class RackProxyTest < Test::Unit::TestCase
     end
   end
 
+  # P0-2: hop-by-hop headers (and any header named by Connection) must be
+  # stripped from the FORWARDED REQUEST, closing the CL/TE smuggling surface.
+  def test_request_hop_by_hop_headers_are_stripped
+    env = {
+      'REMOTE_ADDR'            => '10.0.0.1',
+      'HTTP_ACCEPT'            => 'text/html',
+      'HTTP_CONNECTION'        => 'keep-alive, X-Purge-Me',
+      'HTTP_KEEP_ALIVE'        => 'timeout=5',
+      'HTTP_TE'                => 'trailers',
+      'HTTP_TRANSFER_ENCODING' => 'chunked',
+      'HTTP_PROXY_AUTHORIZATION' => 'Basic zzz',
+      'HTTP_UPGRADE'           => 'websocket',
+      'HTTP_X_PURGE_ME'        => 'please',
+      'HTTP_AUTHORIZATION'     => 'Bearer keep-me'
+    }
+    headers = Rack::Proxy.extract_http_request_headers(env)
+
+    %w[Connection Keep-Alive Te Transfer-Encoding Proxy-Authorization Upgrade].each do |h|
+      assert !headers.key?(h), "#{h} is hop-by-hop and must not be forwarded"
+    end
+    assert !headers.key?('X-Purge-Me'), 'a header named in Connection must be dropped'
+    assert_equal 'text/html', headers['Accept'], 'end-to-end headers must survive'
+    assert_equal 'Bearer keep-me', headers['Authorization'], 'end-to-end Authorization must survive'
+  end
+
+  # P0-6: a gzip-encoded backend body must be forwarded verbatim (still
+  # compressed, Content-Encoding intact, Content-Length matching the bytes sent),
+  # not transparently inflated (which desyncs Content-Length).
+  def test_gzip_body_is_forwarded_verbatim_non_streaming
+    assert_gzip_forwarded_verbatim(streaming: false)
+  end
+
+  def test_gzip_body_is_forwarded_verbatim_streaming
+    assert_gzip_forwarded_verbatim(streaming: true)
+  end
+
+  # P0-3: a method with no Net::HTTP::<Verb> class must be 501, not a raised 500.
+  # (Net::HTTP does define WebDAV verbs like PROPFIND, so use a truly unknown one.)
+  def test_unknown_method_returns_501
+    with_webrick_proxy(streaming: false) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      env = Rack::MockRequest.env_for("/", method: "GET")
+      env["REQUEST_METHOD"] = "BOGUSVERB"
+      status, _headers, _body = proxy.call(env)
+      assert_equal 501, status
+    end
+  end
+
+  # P0-4: a backend refused by backend_allowed? must 502 even when the backend
+  # is reachable and would otherwise succeed.
+  def test_disallowed_backend_returns_502
+    with_webrick_proxy(streaming: false) do |port, proxy|
+      def proxy.backend_allowed?(_backend); false; end
+      proxy.host = "127.0.0.1:#{port}"
+      get "/"
+      assert_equal 502, last_response.status
+    end
+  end
+
+  def test_backend_allowed_by_default
+    proxy = Rack::Proxy.new
+    assert proxy.send(:backend_allowed?, URI("http://198.51.100.7:80")),
+      'default must allow any backend for backward compatibility'
+  end
+
+  # P0-5: an interim 103 Early Hints from the backend must be skipped so the
+  # final 200 (and its body) is returned, on the default streaming path.
+  def test_early_hints_103_is_skipped_streaming
+    with_early_hints_backend do |port|
+      proxy = HostProxy.new(streaming: true)
+      @app = proxy
+      proxy.host = "127.0.0.1:#{port}"
+      get "/"
+      assert_equal 200, last_response.status.to_i, 'must return the final 200, not the interim 103'
+      assert_equal 'hello world', last_response.body
+    end
+  ensure
+    @app = nil
+  end
+
   private
+
+  def assert_gzip_forwarded_verbatim(streaming:)
+    with_webrick_proxy(streaming: streaming) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get "/gzip"
+      assert last_response.ok?
+      body = last_response.body
+      assert_equal 'gzip', last_response['content-encoding'], 'Content-Encoding must be preserved'
+      inflated = Zlib::GzipReader.new(StringIO.new(body.b)).read
+      assert_equal ProxyTestServer::GZIP_PLAINTEXT.b, inflated.b,
+        'body must still be compressed and round-trip to the original payload'
+      if (content_length = last_response['content-length'])
+        assert_equal body.bytesize, content_length.to_i,
+          'Content-Length must match the (compressed) bytes actually forwarded'
+      end
+    end
+  end
+
+  # A raw TCP backend that emits a 103 Early Hints interim response followed by a
+  # final 200. WEBrick can't send 1xx interim responses, so we speak HTTP by hand.
+  def with_early_hints_backend
+    server = TCPServer.new("127.0.0.1", 0)
+    port = server.addr[1]
+    thread = Thread.new do
+      client = server.accept
+      client.gets("\r\n\r\n") # consume request headers
+      client.write("HTTP/1.1 103 Early Hints\r\nLink: </s.css>; rel=preload\r\n\r\n")
+      client.write("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 11\r\nConnection: close\r\n\r\nhello world")
+      client.close
+    rescue IOError, Errno::EPIPE, Errno::ECONNRESET
+      # client went away; nothing to do
+    ensure
+      server.close
+    end
+    yield port
+  ensure
+    thread&.join(2)
+  end
 
   def assert_no_array_header_values(streaming:)
     with_webrick_proxy(streaming: streaming) do |port, proxy|

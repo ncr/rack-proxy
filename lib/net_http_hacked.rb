@@ -49,9 +49,12 @@ class Net::HTTP
   def begin_request_hacked(req)
     begin_transport req
     req.exec @socket, @curr_http_version, edit_path(req.path)
+    # Skip ALL 1xx interim responses (100 Continue, 103 Early Hints, etc.), not
+    # just 100 Continue, to reach the final response — matching modern net/http.
+    # Otherwise a backend's 103 Early Hints is mistaken for the final response.
     begin
       res = Net::HTTPResponse.read_new(@socket)
-    end while res.kind_of?(Net::HTTPContinue)
+    end while res.kind_of?(Net::HTTPInformation)
     res.begin_reading_body_hacked(@socket, req.response_body_permitted?)
     @req_hacked, @res_hacked = req, res
     @res_hacked

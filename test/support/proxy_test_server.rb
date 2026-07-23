@@ -3,6 +3,8 @@
 require "webrick"
 require "webrick/https"
 require "socket"
+require "stringio"
+require "zlib"
 
 # A tiny local WEBrick server with a fixed set of routes, used across the whole
 # test suite so tests never touch the public internet. This is the ONLY approved
@@ -75,6 +77,26 @@ module ProxyTestServer
       res.content_type = "text/plain"
       res.body = "chunk-one chunk-two"
     end
+
+    # Always returns a gzip-encoded body with Content-Encoding: gzip, to prove
+    # the proxy forwards it verbatim instead of transparently decoding it (which
+    # would desync Content-Length). GZIP_PLAINTEXT is the decoded payload.
+    server.mount_proc("/gzip") do |_req, res|
+      res.content_type = "text/plain"
+      res["content-encoding"] = "gzip"
+      res.body = ProxyTestServer.gzip(GZIP_PLAINTEXT)
+    end
+  end
+
+  GZIP_PLAINTEXT = ("the quick brown fox " * 32).freeze
+
+  def gzip(string)
+    io = StringIO.new
+    io.set_encoding(Encoding::BINARY)
+    writer = Zlib::GzipWriter.new(io)
+    writer.write(string)
+    writer.close
+    io.string
   end
 
   # A self-signed certificate for 127.0.0.1, generated once per run. It is
