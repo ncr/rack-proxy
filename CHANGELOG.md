@@ -6,11 +6,19 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.0.1] - 2026-07-23
+
+Docs and housekeeping — no library behavior changes.
+
 ### Changed
 
 - README modernized: badges, quick start, a "How it works" pipeline overview,
-  grouped options, and tightened recipes. No behavior changes.
+  grouped options, and tightened recipes.
 - Removed the internal modernization roadmap document, completed by 1.0.0.
+- Development dependencies refreshed (rake 13.4.2, test-unit 3.7.8,
+  rack-test 2.2.0) and CI bumped to `actions/checkout@v7`. (#136–#139)
 
 ## [1.0.0] - 2026-07-18
 
@@ -167,7 +175,8 @@ or a compatible fix. See the README's "Upgrading" section for migration steps.
 
 Older releases (≤ 0.7.8) predate this changelog; see the git history and tags.
 
-[Unreleased]: https://github.com/ncr/rack-proxy/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/ncr/rack-proxy/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/ncr/rack-proxy/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ncr/rack-proxy/compare/v0.8.3...v1.0.0
 [0.8.3]: https://github.com/ncr/rack-proxy/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/ncr/rack-proxy/compare/v0.8.1...v0.8.2
