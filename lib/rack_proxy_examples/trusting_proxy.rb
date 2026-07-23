@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class TrustingProxy < Rack::Proxy
 
   def rewrite_env(env)

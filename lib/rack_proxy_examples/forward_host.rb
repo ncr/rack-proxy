@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class ForwardHost < Rack::Proxy
 
   def rewrite_env(env)

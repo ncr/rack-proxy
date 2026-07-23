@@ -1,4 +1,17 @@
+# Rack::Proxy
+
 A request/response rewriting HTTP proxy. A Rack app. Subclass `Rack::Proxy` and provide your `rewrite_env` and `rewrite_response` methods.
+
+## Contents
+
+- [Installation](#installation)
+- [Use Cases](#use-cases)
+- [Options](#options)
+- [Security considerations](#security-considerations)
+- [Examples](#examples)
+- [Upgrading](#upgrading)
+- [A note on header keys](#a-note-on-header-keys-96)
+- [Compatibility notes](#compatibility-notes)
 
 Installation
 ----
@@ -36,20 +49,63 @@ Options
 
 Options can be set when initializing the middleware or overriding a method.
 
+* `:streaming` - stream the backend response as it arrives (default `true`). Set to `false` to buffer the whole response before returning it (also required under `webmock`/`vcr` — see [Compatibility notes](#compatibility-notes)).
+* `:backend` - URI (or URI-parseable string) of the backend host/port/scheme to proxy to. If not set, the destination is derived from the incoming request's `Host` — see [Security considerations](#security-considerations).
+* `:read_timeout` - per-read timeout in seconds (default `60`).
+* `:open_timeout` - connection-open timeout in seconds.
+* `:write_timeout` - per-write timeout in seconds.
+* `:ssl_verify_none` - skip TLS certificate verification. Verification is on by default (`VERIFY_PEER`) — see [Upgrading](#upgrading).
+* `:verify_mode` - explicit `OpenSSL::SSL::VERIFY_*` constant; wins over `ssl_verify_none`.
+* `:ca_file` - path to a PEM CA bundle used to verify the backend certificate (prefer this over disabling verification for private CAs).
+* `:cert_store` - an `OpenSSL::X509::Store` used to verify the backend certificate.
+* `:cert` / `:key` - client certificate and key for mutual TLS to the backend.
+* `:min_version` / `:max_version` - TLS protocol range (e.g. `:TLS1_2`), mapped to `Net::HTTP#min_version=` / `#max_version=`.
+* `:ssl_version` - **deprecated**; pins an exact protocol (forbids TLS 1.3). Use `:min_version` / `:max_version`.
+* `:max_response_length` - cap (in bytes) on the backend response size; a larger response is refused with `502` (streaming aborts once the cap is passed).
+* `:username` / `:password` - HTTP Basic credentials sent to the backend.
+* `:logger` - any object responding to `#<<` (e.g. `$stdout`, a `StringIO`, or a Ruby `Logger`). Wired to `Net::HTTP#set_debug_output` so the HTTP wire-level conversation is written to the sink. Useful for debugging.
 
-* `:streaming` - defaults to `true`, but does not work on all Ruby versions, recommend to set to `false`
-* `:ssl_verify_none` - tell `Net::HTTP` to skip TLS certificate verification (defaults to verifying — see [Upgrading](#upgrading) for the 0.8 change)
-* `:verify_mode` - explicit `OpenSSL::SSL::VERIFY_*` constant; wins over `ssl_verify_none`
-* `:ssl_version` - tell `Net::HTTP` to set a specific `ssl_version`
-* `:backend` - the URI parseable format of host and port of the target proxy backend. If not set it will assume the backend target is the same as the source.
-* `:read_timeout` - set proxy timeout it defaults to 60 seconds
-* `:logger` - any object responding to `#<<` (e.g. `$stdout`, a `StringIO`, or a Ruby `Logger`). Wired through to `Net::HTTP#set_debug_output` so the full HTTP wire-level conversation is written to the sink. Useful for debugging.
+Two request-scoped overrides can also be set in `env` (e.g. from `rewrite_env`):
+
+* `env['rack.backend']` - a URI overriding `:backend` for this request.
+* `env['http.read_timeout']` - override `:read_timeout` for this request.
 
 To pass in options, when you configure your middleware you can pass them in as an optional hash.
 
 ```ruby
 Rails.application.config.middleware.use ExampleServiceProxy, backend: 'http://guides.rubyonrails.org', streaming: false
 ```
+
+Security considerations
+----
+
+rack-proxy forwards attacker-influenced requests to a backend and relays the backend's response. Configure and subclass it with that in mind.
+
+* **SSRF / open proxy.** If you do **not** set `:backend`, the destination host/port/scheme is derived from the incoming request's `Host` / `X-Forwarded-Host` header. A bare `Rack::Proxy.new` will therefore proxy to *any* host a client names — including cloud metadata endpoints (`169.254.169.254`), loopback, and private ranges. Either set a fixed `:backend`, or override `backend_allowed?(backend)` to allowlist expected hosts:
+
+    ```ruby
+    class MyProxy < Rack::Proxy
+      ALLOWED = %w[api.internal.example.com].freeze
+
+      def backend_allowed?(backend)
+        ALLOWED.include?(backend.host)
+      end
+    end
+    ```
+
+    A refused backend is answered with `502`. (Making dynamic, `Host`-derived backends opt-in by default is planned for a future major version.)
+
+* **Credential forwarding.** All incoming `HTTP_*` headers are forwarded, including `Authorization` and `Cookie`. Don't proxy to a different trust domain with credentials attached; strip them in `rewrite_env` (e.g. `env['HTTP_COOKIE'] = ''`). Over an `http://` backend these travel in cleartext.
+
+* **X-Forwarded-For.** rack-proxy appends `REMOTE_ADDR` to any inbound `X-Forwarded-For`. If your clients are not behind a trusted proxy, the inbound value is attacker-controlled; sanitize it in `rewrite_env` when the backend trusts that header.
+
+* **TLS verification** defaults to `VERIFY_PEER`. For private-CA backends use `:ca_file` / `:cert_store` rather than `ssl_verify_none: true`.
+
+* **Resource limits.** Use `:max_response_length` plus `:open_timeout` / `:write_timeout` / `:read_timeout` to bound memory and stalls against a hostile or slow backend.
+
+* **Hop-by-hop headers** (Connection, TE, Transfer-Encoding, Proxy-Authorization, …) are stripped from both the forwarded request and the response.
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 Examples
 ----
@@ -132,7 +188,7 @@ Test with `require 'rack_proxy_examples/example_service_proxy'`
 # 1. rails new test_app
 # 2. cd test_app
 # 3. install Rack-Proxy in `Gemfile`
-#    a. `gem 'rack-proxy', '~> 0.7.7'`
+#    a. `gem 'rack-proxy', '~> 0.8.0'`
 # 4. install gem: `bundle install`
 # 5. create `config/initializers/proxy.rb` adding this line `require 'rack_proxy_examples/example_service_proxy'`
 # 6. run: `SERVICE_URL=http://guides.rubyonrails.org rails server`
@@ -307,7 +363,7 @@ key_raw = File.read('./certs/key.pem')
 cert = OpenSSL::X509::Certificate.new(cert_raw)
 key = OpenSSL::PKey.read(key_raw)
 
-use TLSProxy, cert: cert, key: key, use_ssl: true, verify_mode: OpenSSL::SSL::VERIFY_PEER, ssl_version: 'TLSv1_2'
+use TLSProxy, cert: cert, key: key, verify_mode: OpenSSL::SSL::VERIFY_PEER, min_version: :TLS1_2
 ```
 
 And rewrite host for example:
@@ -346,14 +402,7 @@ Per the standard Rack/CGI convention, header names received by your proxy are ex
 
 If you need underscore-style headers preserved end-to-end, configure your fronting web server (e.g. `underscores_in_headers on;` in nginx, or `HTTPProtocolOptions` in Apache) — rack-proxy is not the right layer to fix this.
 
-WARNING
+Compatibility notes
 ----
 
-Doesn't work with `fakeweb`/`webmock`. Both libraries monkey-patch net/http code.
-
-Todos
-----
-
-* Make the docs up to date with the current use case for this code: everything except streaming which involved a rather ugly monkey patch and only worked in 1.8, but does not work now.
-* Improve and validate requirements for Host and Path rewrite rules
-* Ability to inject logger and set log level
+The streaming response path (the default) reads directly from `Net::HTTP`, so it does not work under `webmock`, `vcr`, or `fakeweb`, which monkey-patch `net/http`. If you use those libraries in your tests, set `streaming: false`.

@@ -14,7 +14,14 @@ Gem::Specification.new do |s|
   s.description = %q{A Rack app that provides request/response rewriting proxy capabilities with streaming.}
   s.required_ruby_version = ">= 3.0"
 
-  s.files = Dir["lib/**/*.rb"] + %w[README.md LICENSE rack-proxy.gemspec]
+  s.metadata = {
+    "source_code_uri"       => "https://github.com/ncr/rack-proxy",
+    "changelog_uri"         => "https://github.com/ncr/rack-proxy/blob/master/CHANGELOG.md",
+    "bug_tracker_uri"       => "https://github.com/ncr/rack-proxy/issues",
+    "rubygems_mfa_required" => "true"
+  }
+
+  s.files = Dir["lib/**/*.rb"] + %w[README.md LICENSE CHANGELOG.md SECURITY.md rack-proxy.gemspec]
   s.require_paths = ["lib"]
 
   s.add_dependency("rack", ">= 2.0", "< 4")

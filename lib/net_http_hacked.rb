@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # We are hacking net/http to change semantics of streaming handling
 # from "block" semantics to regular "return" semantics.
 # We need it to construct a streamable rack triplet:

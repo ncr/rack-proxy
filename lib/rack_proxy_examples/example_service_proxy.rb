@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 ###
 # This is an example of how to use Rack-Proxy in a Rails application.
 #
