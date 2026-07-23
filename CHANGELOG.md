@@ -6,13 +6,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- README modernized: badges, quick start, a "How it works" pipeline overview,
+  grouped options, and tightened recipes. No behavior changes.
+- Removed the internal modernization roadmap document, completed by 1.0.0.
 
 ## [1.0.0] - 2026-07-18
 
-The 2026 modernization + security-hardening release (see
-`MODERNIZATION_PLAN.md`). From 1.0.0 on this project follows SemVer strictly:
-breaking changes only in majors.
+The 2026 modernization + security-hardening release. From 1.0.0 on this
+project follows SemVer strictly: breaking changes only in majors.
 
 ### Breaking changes
 

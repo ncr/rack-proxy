@@ -5,9 +5,6 @@ requests to a backend and lets you rewrite the request and response. It is a
 library that other apps mount — so the bar is: **safe defaults, no surprises, and
 never regress the security behavior below.** Read this before changing code.
 
-The living improvement roadmap is [`MODERNIZATION_PLAN.md`](MODERNIZATION_PLAN.md)
-(prioritized P0–P3, batched). Check it before starting non-trivial work.
-
 ## Commands
 
 ```sh
@@ -104,5 +101,5 @@ smoke test, and a blocking lint job (standardrb + coverage floor + bundler-audit
 This is a proxy: assume request headers, the `Host`, and the backend response are
 attacker-influenced. When adding a feature, ask "what does a hostile client or
 backend do with this?" Prefer a safe default plus an explicit opt-in over a
-convenient-but-unsafe default. See the "Security" work in MODERNIZATION_PLAN
-(P0-2/4, P1-8).
+convenient-but-unsafe default. The threat model and disclosure process live in
+[SECURITY.md](SECURITY.md).
