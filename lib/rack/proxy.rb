@@ -1,12 +1,11 @@
 require "net_http_hacked"
 require "rack/http_streaming_response"
+require "rack/proxy/version"
 
 module Rack
 
   # Subclass and bring your own #rewrite_request and #rewrite_response
   class Proxy
-    VERSION = "0.8.3".freeze
-
     HOP_BY_HOP_HEADERS = {
       'connection' => true,
       'keep-alive' => true,

@@ -4,9 +4,14 @@ require "rack/http_streaming_response"
 class HttpStreamingResponseTest < Test::Unit::TestCase
 
   def setup
-    host, req = "example.com", Net::HTTP::Get.new("/")
-    @response = Rack::HttpStreamingResponse.new(req, host, 443)
-    @response.use_ssl = true
+    @server, port = ProxyTestServer.start_server(ssl: false)
+    req = Net::HTTP::Get.new("/")
+    @response = Rack::HttpStreamingResponse.new(req, "127.0.0.1", port)
+    @response.use_ssl = false
+  end
+
+  def teardown
+    @server&.shutdown
   end
 
   def test_streaming

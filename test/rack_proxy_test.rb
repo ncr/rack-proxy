@@ -16,52 +16,70 @@ class RackProxyTest < Test::Unit::TestCase
   end
 
   def test_http_streaming
-    get "/"
-    assert last_response.ok?
-
-    assert_match(/Example Domain/, last_response.body)
+    with_webrick_proxy do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get "/"
+      assert last_response.ok?
+      assert_match(/Example Domain/, last_response.body)
+    end
   end
 
   def test_http_full_request
-    app(:streaming => false)
-    get "/"
-    assert last_response.ok?
-    assert_match(/Example Domain/, last_response.body)
+    with_webrick_proxy(streaming: false) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get "/"
+      assert last_response.ok?
+      assert_match(/Example Domain/, last_response.body)
+    end
   end
 
   def test_http_full_request_headers
-    app(:streaming => false)
-    app.host = 'httpbin.org'
-    get "/cookies/set?test=1"
-    assert !Array(last_response['Set-Cookie']).empty?, 'httpbin.org/cookies/set should set a cookie'
+    with_webrick_proxy(streaming: false) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get "/cookies/set?test=1"
+      assert !Array(last_response['Set-Cookie']).empty?, '/cookies/set should set a cookie'
+    end
   end
 
+  # The offline HTTPS tests proxy over TLS to a self-signed local server with
+  # verification disabled, exercising the streaming/non-streaming TLS transport
+  # and the :ssl_version plumbing. The VERIFY_PEER *success* path (a trusted
+  # cert accepted by default) is covered by test/live_smoke_test.rb until the
+  # planned :ca_file option lands, at which point it becomes hermetic too.
   def test_https_streaming
-    app.host = 'www.apple.com'
-    get 'https://example.com'
-    assert last_response.ok?
-    assert_match(/(itunes|iphone|ipod|mac|ipad)/, last_response.body)
+    with_webrick_proxy(ssl: true, ssl_verify_none: true) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get 'https://example.com'
+      assert last_response.ok?
+      assert_match(/Example Domain/, last_response.body)
+    end
   end
 
   def test_https_streaming_tls
-    app(:ssl_version => :TLSv1_2).host = 'www.apple.com'
-    get 'https://example.com'
-    assert last_response.ok?
-    assert_match(/(itunes|iphone|ipod|mac|ipad)/, last_response.body)
+    with_webrick_proxy(ssl: true, ssl_verify_none: true, ssl_version: :TLSv1_2) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get 'https://example.com'
+      assert last_response.ok?
+      assert_match(/Example Domain/, last_response.body)
+    end
   end
 
   def test_https_full_request
-    app(:streaming => false).host = 'www.apple.com'
-    get 'https://example.com'
-    assert last_response.ok?
-    assert_match(/(itunes|iphone|ipod|mac|ipad)/, last_response.body)
+    with_webrick_proxy(ssl: true, streaming: false, ssl_verify_none: true) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get 'https://example.com'
+      assert last_response.ok?
+      assert_match(/Example Domain/, last_response.body)
+    end
   end
 
   def test_https_full_request_tls
-    app({:streaming => false, :ssl_version => :TLSv1_2}).host = 'www.apple.com'
-    get 'https://example.com'
-    assert last_response.ok?
-    assert_match(/(itunes|iphone|ipod|mac|ipad)/, last_response.body)
+    with_webrick_proxy(ssl: true, streaming: false, ssl_verify_none: true, ssl_version: :TLSv1_2) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get 'https://example.com'
+      assert last_response.ok?
+      assert_match(/Example Domain/, last_response.body)
+    end
   end
 
   def test_normalize_headers
@@ -156,10 +174,23 @@ class RackProxyTest < Test::Unit::TestCase
     end
   end
 
+  # Issue: hop-by-hop headers (here Transfer-Encoding, sent by the chunked
+  # backend) must be stripped from the response. The local /chunked route makes
+  # this assertion meaningful — the previous live-host version passed vacuously
+  # because the backend never actually sent a hop-by-hop header.
   def test_response_header_included_Hop_by_hop
-    app({:streaming => true}).host = 'mockapi.io'
-    get 'https://example.com/oauth2/token/info?access_token=123'
-    assert !last_response.headers.key?('transfer-encoding')
+    with_webrick_proxy(streaming: true) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get '/chunked'
+      # Assert on the headers actually emitted to the client (iteration), not
+      # via #key?: Rack 2's HeaderHash#reject! leaves a stale case-insensitive
+      # index, so #key? can report a header that iteration correctly omits.
+      transfer_encoding_emitted =
+        last_response.headers.any? { |k, _| k.downcase == 'transfer-encoding' }
+      assert !transfer_encoding_emitted,
+        'hop-by-hop Transfer-Encoding must be stripped from the proxied response'
+      assert_match(/chunk-one/, last_response.body, 'chunked body must still be forwarded')
+    end
   end
 
   # Issue #58: connection errors should return 502, not raise.
@@ -186,6 +217,9 @@ class RackProxyTest < Test::Unit::TestCase
     assert_equal '', last_response.body
   end
 
+  # `.invalid` is reserved (RFC 6761) and never resolves, so this stays
+  # deterministic and offline: the SocketError from a failed DNS lookup must be
+  # mapped to 502, not raised.
   def test_unknown_host_returns_502
     app({:streaming => false}).host = 'no-such-host.invalid'
     get '/'
@@ -232,7 +266,7 @@ class RackProxyTest < Test::Unit::TestCase
   end
 
   # Issue #113: SSL cert verification must default to VERIFY_PEER (Ruby's
-  # Net::HTTP default), not VERIFY_NONE.
+  # Net::HTTP default), not VERIFY_NONE. INVARIANT — see CLAUDE.md.
   def test_ssl_default_is_verify_peer
     proxy = Rack::Proxy.new
     assert_nil proxy.instance_variable_get(:@verify_mode),
@@ -249,17 +283,23 @@ class RackProxyTest < Test::Unit::TestCase
     assert_equal OpenSSL::SSL::VERIFY_PEER, proxy.instance_variable_get(:@verify_mode)
   end
 
+  # The local HTTPS server uses a self-signed cert, so the default VERIFY_PEER
+  # must reject it. This is the hermetic replacement for the old badssl.com test
+  # and is now the primary regression guard for the VERIFY_PEER default.
   def test_https_default_rejects_invalid_certificate
-    # self-signed cert on a public test host should be rejected with the new default
-    app({:streaming => false}).host = 'self-signed.badssl.com'
-    error = assert_raise(OpenSSL::SSL::SSLError) { get 'https://example.com/' }
-    assert_match(/certificate verify failed/, error.message)
+    with_webrick_proxy(ssl: true, streaming: false) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      error = assert_raise(OpenSSL::SSL::SSLError) { get 'https://example.com/' }
+      assert_match(/certificate verify failed/, error.message)
+    end
   end
 
   def test_https_with_ssl_verify_none_accepts_invalid_certificate
-    app({:streaming => false, :ssl_verify_none => true}).host = 'self-signed.badssl.com'
-    get 'https://example.com/'
-    assert last_response.ok?
+    with_webrick_proxy(ssl: true, streaming: false, ssl_verify_none: true) do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      get 'https://example.com/'
+      assert last_response.ok?
+    end
   end
 
   # Issue #80: a :logger option should pipe Net::HTTP debug output to the
@@ -327,26 +367,13 @@ class RackProxyTest < Test::Unit::TestCase
   end
 
 
-  # Spin up a tiny WEBrick server with fixed routes so we can exercise the
-  # proxy against real Net::HTTP requests without depending on a remote host.
-  def with_webrick_proxy(**proxy_opts)
-    require 'webrick'
-    server = WEBrick::HTTPServer.new(
-      Port: 0,
-      BindAddress: '127.0.0.1',
-      Logger: WEBrick::Log.new(File::NULL),
-      AccessLog: []
-    )
-    server.mount_proc('/no-content')   { |_req, res| res.status = 204 }
-    server.mount_proc('/not-modified') { |_req, res| res.status = 304 }
-    server.mount_proc('/empty')        { |_req, res| res.body = '' }
-    server.mount_proc('/echo-headers') do |_req, res|
-      res['x-custom'] = 'value-here'
-      res.body = 'ok'
-    end
-    server.mount_proc('/echo-body')    { |req, res| res.body = req.body.to_s }
-    Thread.new { server.start }
-    port = server.config[:Port]
+  # Spin up a tiny local WEBrick server (see test/support/proxy_test_server.rb)
+  # so we can exercise the proxy against real Net::HTTP requests without touching
+  # the network. Pass ssl: true for an HTTPS backend with a self-signed cert; all
+  # other keyword options are forwarded to the proxy (e.g. streaming:,
+  # ssl_verify_none:, ssl_version:, logger:).
+  def with_webrick_proxy(ssl: false, **proxy_opts)
+    server, port = ProxyTestServer.start_server(ssl: ssl)
 
     proxy = HostProxy.new(**proxy_opts)
     @app = proxy
