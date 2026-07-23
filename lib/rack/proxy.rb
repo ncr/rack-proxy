@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "rack"
-require "net_http_hacked"
+require "net/https"
 require "rack/http_streaming_response"
 require "rack/proxy/version"
 
@@ -31,7 +31,11 @@ module Rack
       Net::ReadTimeout, Net::WriteTimeout,
       IOError,                      # includes EOFError
       OpenSSL::SSL::SSLError,
-      Net::ProtocolError            # includes Net::HTTPBadResponse
+      Net::ProtocolError,
+      # A malformed status line / header block raises these; they subclass
+      # StandardError directly, NOT Net::ProtocolError, so list them explicitly
+      # or a hostile backend crashes the proxy with a raw 500 instead of a 502.
+      Net::HTTPBadResponse, Net::HTTPHeaderSyntaxError
     ].freeze
 
     class << self

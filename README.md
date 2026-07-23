@@ -49,7 +49,7 @@ Options
 
 Options can be set when initializing the middleware or overriding a method.
 
-* `:streaming` - stream the backend response as it arrives (default `true`). Set to `false` to buffer the whole response before returning it (also required under `webmock`/`vcr` — see [Compatibility notes](#compatibility-notes)).
+* `:streaming` - stream the backend response as it arrives (default `true`). Set to `false` to buffer the whole response before returning it (also recommended under `webmock`/`vcr` — see [Compatibility notes](#compatibility-notes)).
 * `:backend` - URI (or URI-parseable string) of the backend host/port/scheme to proxy to. If not set, the destination is derived from the incoming request's `Host` — see [Security considerations](#security-considerations).
 * `:read_timeout` - per-read timeout in seconds (default `60`).
 * `:open_timeout` - connection-open timeout in seconds.
@@ -405,4 +405,4 @@ If you need underscore-style headers preserved end-to-end, configure your fronti
 Compatibility notes
 ----
 
-The streaming response path (the default) reads directly from `Net::HTTP`, so it does not work under `webmock`, `vcr`, or `fakeweb`, which monkey-patch `net/http`. If you use those libraries in your tests, set `streaming: false`.
+The streaming response path (the default) streams straight off the backend socket via `Net::HTTP`. Historically it relied on private `net/http` internals and did not work at all under `webmock`, `vcr`, or `fakeweb`; it now uses only the public `Net::HTTP#request` API, but those libraries still replace the real network layer, so behavior under them is not guaranteed. In tests that stub HTTP, prefer `streaming: false`.

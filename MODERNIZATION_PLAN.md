@@ -12,21 +12,30 @@
 >   `SECURITY.md` + README "Security considerations" (P1-8), `CHANGELOG.md` +
 >   gemspec metadata/MFA (P1-9), README accuracy overhaul (P2-1), `CONTRIBUTING.md`,
 >   `frozen_string_literal` pragmas (P2-7 partial), LICENSE year.
+> - Batch 5 Fiber streaming rewrite — DONE, branch `modernization/batch-5-fiber-streaming`:
+>   P1-5 landed. `HttpStreamingResponse` now streams via the public block form of
+>   `Net::HTTP#request` run inside a Fiber (yield at headers, resume per chunk,
+>   `Fiber#raise`-unwind on early close); `net_http_hacked.rb` is a deprecated
+>   functional shim (warns on require, removal next release). Load-bearing details:
+>   `max_retries = 0` (no silent request replay mid-stream), `StreamAborted` is a
+>   plain StandardError (must never match net/http's retriable classes), request
+>   `decode_content` forced off (verbatim gzip pass-through). New guards: close
+>   after headers, mid-stream break/abort, HEAD, streaming 204/304, mid-stream
+>   backend death, never-retry, shim deprecation warning.
 >
 > ## Continuation / handoff (read this if resuming on another machine)
 >
-> Four branches are **stacked**, each its own PR — merge in order:
-> `batch-1-green-loop` → `batch-2-security` → `batch-3-tls-timeouts` → `batch-4-docs-supply-chain`.
+> Five branches are **stacked**, each its own PR — merge in order:
+> `batch-1-green-loop` → `batch-2-security` → `batch-3-tls-timeouts` →
+> `batch-4-docs-supply-chain` → `batch-5-fiber-streaming`.
 > `master` is untouched. Run tests with `bundle exec rake test` (offline, ~0.2s);
 > CI covers Ruby 3.1–3.4 × Rack 2/3. See [`CLAUDE.md`](CLAUDE.md) for invariants/traps.
 >
 > **Decisions locked in:** (1) the P0-4 SSRF `backend_allowed?` default stays
-> allow-all until a **major** version bump; (2) the P1-5 Fiber rewrite is
-> deferred as its own dedicated, heavily-tested pass (not started).
+> allow-all until a **major** version bump; (2) `net_http_hacked.rb` stays as a
+> deprecated functional shim for exactly one release, then gets deleted.
 >
 > **Still open / next up:**
-> - **P1-5** — Fiber-based rewrite retiring `lib/net_http_hacked.rb` (the one
->   high-risk item; monkey-patch works and is guarded in the meantime).
 > - **P2-7 remainder** — adopt Standard/RuboCop and add a lint + `bundler-audit`
 >   CI job (frozen-string pragmas already landed; a full `--fix` should be its own commit).
 > - **P2-5 remainder** — physically move `lib/rack_proxy_examples/` → `examples/`
@@ -37,7 +46,7 @@
 > - When ready to release, bump `lib/rack/proxy/version.rb`, move the CHANGELOG
 >   `[Unreleased]` section under the new version, tag `vX.Y.Z`.
 
-Baseline already in place (do **not** redo): VERIFY_PEER default (proxy.rb:149/158), 502-on-connect-error mapping (proxy.rb:172), Rack 3 `Headers`/Rack 2 `HeaderHash` branch (proxy.rb:44-50), non-rewindable body guard (proxy.rb:131), `:logger` option. Everything below builds on that.
+Baseline already in place (do **not** redo): VERIFY_PEER default (now centralized in `configure_backend_connection`), 502-on-backend-error mapping, Rack 3 `Headers`/Rack 2 `HeaderHash` branch, non-rewindable body guard, `:logger` option. Line references in the item bodies below describe the codebase as it was when the plan was written — the progress banner above is the source of truth for what has landed.
 
 Effort key: **S** ≤ ½ day · **M** ~1-2 days · **L** ~several days. `[agent-DX]` = directly serves the goal of a repo that is easy + safe for AI agents to work in.
 
