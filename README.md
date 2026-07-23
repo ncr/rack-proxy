@@ -1,90 +1,138 @@
 # Rack::Proxy
 
-A request/response rewriting HTTP proxy. A Rack app. Subclass `Rack::Proxy` and provide your `rewrite_env` and `rewrite_response` methods.
+[![Gem Version](https://img.shields.io/gem/v/rack-proxy)](https://rubygems.org/gems/rack-proxy)
+[![CI](https://github.com/ncr/rack-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/ncr/rack-proxy/actions/workflows/ci.yml)
+[![Downloads](https://img.shields.io/gem/dt/rack-proxy)](https://rubygems.org/gems/rack-proxy)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+A request/response rewriting HTTP proxy for Rack. Run it standalone as a tiny reverse proxy, or mount it as middleware and subclass it to rewrite requests and responses in flight.
+
+- **Streams by default** — response bodies are relayed chunk by chunk straight off the backend socket, so large responses never buffer in memory.
+- **Safe by default** — TLS verification on (`VERIFY_PEER`), Host-derived backends refused unless explicitly opted in, hop-by-hop headers stripped in both directions, backend failures mapped to `502` instead of raising.
+- **Small** — two files on top of plain `Net::HTTP`; the only runtime dependency is Rack.
+
+Typical uses:
+
+- an authenticating/authorizing gateway in front of a trusting internal backend
+- serving another app from the same origin to avoid CORS complications
+- subdomain- or path-based routing to multiple internal services
+- redirecting awkward legacy paths (e.g. `.php` pages) to another app
+- inserting or stripping headers that are required — or problematic — for certain clients
 
 ## Contents
 
 - [Installation](#installation)
-- [Use Cases](#use-cases)
+- [Quick start](#quick-start)
+- [How it works](#how-it-works)
 - [Options](#options)
 - [Security considerations](#security-considerations)
-- [Examples](#examples)
+- [Recipes](#recipes)
 - [Upgrading](#upgrading)
-- [A note on header keys](#a-note-on-header-keys-96)
+- [Header keys and underscores](#header-keys-and-underscores)
 - [Compatibility notes](#compatibility-notes)
+- [Development](#development)
 
-Installation
-----
+## Installation
 
-Add the following to your `Gemfile`:
+Requires Ruby >= 3.0 and Rack 2.x or 3.x. Add to your `Gemfile`:
 
-```
-gem 'rack-proxy', '~> 1.0'
-```
-
-Or install:
-
-```
-gem install rack-proxy
+```ruby
+gem "rack-proxy", "~> 1.0"
 ```
 
-Use Cases
-----
+## Quick start
 
-Below are some examples of real world use cases for Rack-Proxy. If you have done something interesting, add it to the list below and send a PR.
+A standalone reverse proxy is one line of `config.ru`:
 
-* Allowing one app to act as central trust authority
-  * handle accepting self-sign certificates for internal apps
-  * authentication / authorization prior to proxying requests to a blindly trusting backend
-  * avoiding CORs complications by proxying from same domain to another backend
-* subdomain based pass-through to multiple apps
-* Complex redirect rules
-   * redirect pages with different extensions (ex: `.php`) to another app
-   * useful for handling awkward redirection rules for moved pages
-* fan Parallel Requests: turning a single API request to [multiple concurrent backend requests](https://github.com/typhoeus/typhoeus#making-parallel-requests) & merging results.
-* inserting or stripping headers required or problematic for certain clients
+```ruby
+require "rack-proxy"
 
-Options
-----
+run Rack::Proxy.new(backend: "http://localhost:8080")
+```
 
-Options can be set when initializing the middleware or overriding a method.
+As middleware, subclass it and decide per request: call `super` to proxy, or hand the request to the rest of your app:
 
-* `:streaming` - stream the backend response as it arrives (default `true`). Set to `false` to buffer the whole response before returning it (also recommended under `webmock`/`vcr` — see [Compatibility notes](#compatibility-notes)).
-* `:backend` - URI (or URI-parseable string) of the backend host/port/scheme to proxy to. If not set, the destination is derived from the incoming request's `Host` — which is **refused by default** since 1.0; see `:allow_dynamic_backend` and [Security considerations](#security-considerations).
-* `:allow_dynamic_backend` - opt in (`true`) to deriving the destination from the client-supplied `Host` header when no `:backend` is configured. Off by default (such requests get `502`), because a bare dynamic proxy is an open proxy. Combine with a `backend_allowed?` allowlist.
-* `:read_timeout` - per-read timeout in seconds (default `60`).
-* `:open_timeout` - connection-open timeout in seconds.
-* `:write_timeout` - per-write timeout in seconds.
-* `:ssl_verify_none` - skip TLS certificate verification. Verification is on by default (`VERIFY_PEER`) — see [Upgrading](#upgrading).
-* `:verify_mode` - explicit `OpenSSL::SSL::VERIFY_*` constant; wins over `ssl_verify_none`.
-* `:ca_file` - path to a PEM CA bundle used to verify the backend certificate (prefer this over disabling verification for private CAs).
-* `:cert_store` - an `OpenSSL::X509::Store` used to verify the backend certificate.
-* `:cert` / `:key` - client certificate and key for mutual TLS to the backend.
-* `:min_version` / `:max_version` - TLS protocol range (e.g. `:TLS1_2`), mapped to `Net::HTTP#min_version=` / `#max_version=`.
-* `:ssl_version` - **deprecated**; pins an exact protocol (forbids TLS 1.3). Use `:min_version` / `:max_version`.
-* `:max_response_length` - cap (in bytes) on the backend response size; a larger response is refused with `502` (streaming aborts once the cap is passed).
-* `:username` / `:password` - HTTP Basic credentials sent to the backend.
-* `:strip_credentials` - when `true`, drop the client's `Cookie` and `Authorization` headers instead of forwarding them — see [Security considerations](#security-considerations). The strip applies **after** `rewrite_env`, so a credential injected there is stripped too; attach a proxy-owned credential with `:username`/`:password` instead.
-* `:replace_x_forwarded_for` - when `true`, discard the client-supplied `X-Forwarded-For` chain and forward only this hop's `REMOTE_ADDR` (default appends to the chain) — see [Security considerations](#security-considerations).
-* `:logger` - any object responding to `#<<` (e.g. `$stdout`, a `StringIO`, or a Ruby `Logger`). Wired to `Net::HTTP#set_debug_output` so the HTTP wire-level conversation is written to the sink. Useful for debugging.
+```ruby
+class ApiProxy < Rack::Proxy
+  def perform_request(env)
+    if env["PATH_INFO"].start_with?("/api/")
+      env["HTTP_HOST"] = "api.internal.example" # most backends route on Host
+      super
+    else
+      @app.call(env)
+    end
+  end
+end
+
+# Rails (config/initializers/proxy.rb):
+Rails.application.config.middleware.use ApiProxy, backend: "https://api.internal.example"
+
+# Any Rack app (config.ru or Sinatra):
+use ApiProxy, backend: "https://api.internal.example"
+```
+
+## How it works
+
+Every request runs through a three-step pipeline:
+
+```
+call(env) → rewrite_env(env) → perform_request(env) → rewrite_response([status, headers, body])
+```
+
+Override the steps you need:
+
+- **`rewrite_env(env)`** — modify the request before it is forwarded (`HTTP_HOST`, path, headers, …). Return the env.
+- **`rewrite_response(triplet)`** — post-process the backend's `[status, headers, body]`. Return the triplet. If you change the body, delete or recalculate `Content-Length` (`headers["content-length"] = nil`) or clients may receive truncated responses.
+- **`perform_request(env)`** — take over routing: `super` proxies the request, `@app.call(env)` passes it through to the wrapped app (middleware mode).
+- **`backend_allowed?(backend)`** — per-request allowlist hook, consulted for every request; return `false` to refuse with `502`. See [Security considerations](#security-considerations).
 
 Two request-scoped overrides can also be set in `env` (e.g. from `rewrite_env`):
 
-* `env['rack.backend']` - a URI overriding `:backend` for this request.
-* `env['http.read_timeout']` - override `:read_timeout` for this request.
+- `env["rack.backend"]` — a URI (or URI-parseable string) overriding `:backend` for this request.
+- `env["http.read_timeout"]` — override `:read_timeout` for this request.
 
-To pass in options, when you configure your middleware you can pass them in as an optional hash.
+## Options
 
-```ruby
-Rails.application.config.middleware.use ExampleServiceProxy, backend: 'http://guides.rubyonrails.org', streaming: false
-```
+Pass options when instantiating (`Rack::Proxy.new(backend: ...)`) or mounting middleware (`use ApiProxy, backend: ...`).
 
-Security considerations
-----
+### Routing and mode
+
+- `:backend` — URI (or URI-parseable string) of the backend host/port/scheme to proxy to. If not set, the destination is derived from the incoming request's `Host` — which is **refused by default** since 1.0; see `:allow_dynamic_backend`.
+- `:allow_dynamic_backend` — opt in (`true`) to deriving the destination from the client-supplied `Host` header when no `:backend` is configured. Off by default (such requests get `502`), because a bare dynamic proxy is an open proxy. Combine with a `backend_allowed?` allowlist.
+- `:streaming` — stream the backend response as it arrives (default `true`). Set to `false` to buffer the whole response before returning it (also recommended under `webmock`/`vcr` — see [Compatibility notes](#compatibility-notes)).
+
+### TLS
+
+- `:ssl_verify_none` — skip TLS certificate verification. Verification is on by default (`VERIFY_PEER`) — see [Upgrading](#upgrading).
+- `:verify_mode` — explicit `OpenSSL::SSL::VERIFY_*` constant; wins over `ssl_verify_none`.
+- `:ca_file` — path to a PEM CA bundle used to verify the backend certificate (prefer this over disabling verification for private CAs).
+- `:cert_store` — an `OpenSSL::X509::Store` used to verify the backend certificate.
+- `:cert` / `:key` — client certificate and key for mutual TLS to the backend.
+- `:min_version` / `:max_version` — TLS protocol range (e.g. `:TLS1_2`), mapped to `Net::HTTP#min_version=` / `#max_version=`.
+- `:ssl_version` — **deprecated**; pins an exact protocol (forbids TLS 1.3). Use `:min_version` / `:max_version`.
+
+### Timeouts and limits
+
+- `:read_timeout` — per-read timeout in seconds (default `60`).
+- `:open_timeout` — connection-open timeout in seconds.
+- `:write_timeout` — per-write timeout in seconds.
+- `:max_response_length` — cap (in bytes) on the backend response size; a larger response is refused with `502` (streaming aborts once the cap is passed).
+
+### Request shaping
+
+- `:username` / `:password` — HTTP Basic credentials sent to the backend.
+- `:strip_credentials` — when `true`, drop the client's `Cookie` and `Authorization` headers instead of forwarding them — see [Security considerations](#security-considerations). The strip applies **after** `rewrite_env`, so a credential injected there is stripped too; attach a proxy-owned credential with `:username`/`:password` instead.
+- `:replace_x_forwarded_for` — when `true`, discard the client-supplied `X-Forwarded-For` chain and forward only this hop's `REMOTE_ADDR` (default appends to the chain) — see [Security considerations](#security-considerations).
+
+### Debugging
+
+- `:logger` — any object responding to `#<<` (e.g. `$stdout`, a `StringIO`, or a Ruby `Logger`). Wired to `Net::HTTP#set_debug_output` so the HTTP wire-level conversation is written to the sink.
+
+## Security considerations
 
 rack-proxy forwards attacker-influenced requests to a backend and relays the backend's response. Configure and subclass it with that in mind.
 
-* **SSRF / open proxy — safe by default since 1.0.** If you do **not** set `:backend`, the destination host/port/scheme would be derived from the incoming request's `Host` / `X-Forwarded-Host` header — meaning a client could steer the proxy at *any* host, including cloud metadata endpoints (`169.254.169.254`), loopback, and private ranges. Such requests are now refused with `502` unless you pass `allow_dynamic_backend: true`. When you do opt in, pin an allowlist on top by overriding `backend_allowed?(backend)` (consulted for every request, static backends included):
+- **SSRF / open proxy — safe by default since 1.0.** If you do **not** set `:backend`, the destination host/port/scheme would be derived from the incoming request's `Host` / `X-Forwarded-Host` header — meaning a client could steer the proxy at *any* host, including cloud metadata endpoints (`169.254.169.254`), loopback, and private ranges. Such requests are now refused with `502` unless you pass `allow_dynamic_backend: true`. When you do opt in, pin an allowlist on top by overriding `backend_allowed?(backend)` (consulted for every request, static backends included):
 
     ```ruby
     class MyProxy < Rack::Proxy
@@ -100,29 +148,23 @@ rack-proxy forwards attacker-influenced requests to a backend and relays the bac
 
     A refused backend is answered with `502` (with a hint in the `:logger` output).
 
-* **Credential forwarding.** All incoming `HTTP_*` headers are forwarded, including `Authorization` and `Cookie`. Don't proxy to a different trust domain with credentials attached — pass `strip_credentials: true` to drop both (or do finer-grained filtering in `rewrite_env`). Over an `http://` backend these travel in cleartext.
+- **Credential forwarding.** All incoming `HTTP_*` headers are forwarded, including `Authorization` and `Cookie`. Don't proxy to a different trust domain with credentials attached — pass `strip_credentials: true` to drop both (or do finer-grained filtering in `rewrite_env`). Over an `http://` backend these travel in cleartext.
 
-* **X-Forwarded-For.** rack-proxy appends `REMOTE_ADDR` to any inbound `X-Forwarded-For`. If your clients are not behind a trusted proxy, the inbound value is attacker-controlled; pass `replace_x_forwarded_for: true` to forward only the directly-connected peer's address when the backend trusts that header.
+- **X-Forwarded-For.** rack-proxy appends `REMOTE_ADDR` to any inbound `X-Forwarded-For`. If your clients are not behind a trusted proxy, the inbound value is attacker-controlled; pass `replace_x_forwarded_for: true` to forward only the directly-connected peer's address when the backend trusts that header.
 
-* **TLS verification** defaults to `VERIFY_PEER`. For private-CA backends use `:ca_file` / `:cert_store` rather than `ssl_verify_none: true`.
+- **TLS verification** defaults to `VERIFY_PEER`. For private-CA backends use `:ca_file` / `:cert_store` rather than `ssl_verify_none: true`.
 
-* **Resource limits.** Use `:max_response_length` plus `:open_timeout` / `:write_timeout` / `:read_timeout` to bound memory and stalls against a hostile or slow backend.
+- **Resource limits.** Use `:max_response_length` plus `:open_timeout` / `:write_timeout` / `:read_timeout` to bound memory and stalls against a hostile or slow backend.
 
-* **Hop-by-hop headers** (Connection, TE, Transfer-Encoding, Proxy-Authorization, …) are stripped from both the forwarded request and the response.
+- **Hop-by-hop headers** (Connection, TE, Transfer-Encoding, Proxy-Authorization, …) are stripped from both the forwarded request and the response.
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
-Examples
-----
+## Recipes
 
-The snippets below (also in [`examples/`](examples/) in the repository) are meant to be **copied into your app** — e.g. into `app/middleware/` or `lib/` — and adapted. They are not shipped in the gem and cannot be `require`d from it. To mount one in Rails, copy the class into your app and add it to the middleware stack in an initializer:
+The snippets below (also in [`examples/`](examples/) in the repository) are meant to be **copied into your app** — e.g. into `app/middleware/` or `lib/` — and adapted. They are not shipped in the gem and cannot be `require`d from it.
 
-```ruby
-# config/initializers/proxy.rb
-Rails.application.config.middleware.use ForwardHost, backend: "http://example.com"
-```
-
-### Forward request to Host and Insert Header
+### Rewrite the Host and add a response header
 
 From [`examples/forward_host.rb`](examples/forward_host.rb):
 
@@ -149,7 +191,12 @@ class ForwardHost < Rack::Proxy
 end
 ```
 
-### Disable SSL session verification when proxying a server with e.g. self-signed SSL certs
+```ruby
+# config/initializers/proxy.rb
+Rails.application.config.middleware.use ForwardHost, backend: "http://example.com"
+```
+
+### Proxy to a backend with a self-signed certificate
 
 From [`examples/trusting_proxy.rb`](examples/trusting_proxy.rb):
 
@@ -179,7 +226,9 @@ Rails.application.config.middleware.use TrustingProxy,
   ssl_verify_none: true
 ```
 
-### Rails middleware example
+For a backend signed by a private CA, prefer `ca_file: "/path/to/ca.pem"` over disabling verification.
+
+### Mount an external service under a path (Rails)
 
 From [`examples/example_service_proxy.rb`](examples/example_service_proxy.rb):
 
@@ -224,11 +273,9 @@ class ExampleServiceProxy < Rack::Proxy
 end
 ```
 
-### Using as middleware to forward only some extensions to another Application
+### Proxy only matching requests (e.g. `.php`) as middleware
 
 From [`examples/rack_php_proxy.rb`](examples/rack_php_proxy.rb):
-
-Example: Proxying only requests that end with ".php" could be done like this:
 
 ```ruby
 ###
@@ -267,113 +314,65 @@ class RackPhpProxy < Rack::Proxy
 end
 ```
 
-To use the middleware, please consider the following:
-
-1) For Rails we could add a configuration in `config/application.rb`
+Mount it in Rails (`config/application.rb`):
 
 ```ruby
-  config.middleware.use RackPhpProxy, backend: "http://php.net", ssl_verify_none: true
+config.middleware.use RackPhpProxy, backend: "http://php.net"
 ```
 
-2) For Sinatra or any Rack-based application:
+or in Sinatra / any Rack app:
 
 ```ruby
 class MyAwesomeSinatra < Sinatra::Base
-   use RackPhpProxy, backend: "http://php.net", ssl_verify_none: true
+  use RackPhpProxy, backend: "http://php.net"
 end
 ```
 
-This will allow to run the other requests through the application and only proxy the requests that match the condition from the middleware.
+Requests matching the condition are proxied; everything else runs through your application as usual. See the tests for more examples.
 
-See tests for more examples.
+### Local TLS-terminating proxy
 
-### SSL proxy for SpringBoot applications debugging
+Useful when an external integration (OAuth callbacks, webhooks) insists on talking HTTPS to your dev machine: terminate TLS locally and forward the decrypted traffic to your app running on plain HTTP.
 
-Whenever you need to debug communication with external services with HTTPS protocol (like OAuth based) you have to be able to access to your local web app through HTTPS protocol too. Typical way is to use nginx or Apache httpd as a reverse proxy but it might be inconvinuent for development environment. Simple proxy server is a better way in this case. The only what we need is to unpack incoming SSL queries and proxy them to a backend. We can prepare minimal set of files to create autonomous proxy server.
-
-Create `config.ru` file:
 ```ruby
-#
 # config.ru
-#
-require 'rack'
-require 'rack-proxy'
+require "rack-proxy"
 
-class ForwardHost < Rack::Proxy
+class ForwardProto < Rack::Proxy
   def rewrite_env(env)
-    env['HTTP_X_FORWARDED_HOST'] = env['SERVER_NAME']
-    env['HTTP_X_FORWARDED_PROTO'] = env['rack.url_scheme']
+    env["HTTP_X_FORWARDED_HOST"] = env["SERVER_NAME"]
+    env["HTTP_X_FORWARDED_PROTO"] = env["rack.url_scheme"]
     env
   end
 end
 
-run ForwardHost.new(backend: 'http://localhost:8080')
+run ForwardProto.new(backend: "http://localhost:8080")
 ```
 
-Create `Gemfile` file:
-```ruby
-source "https://rubygems.org"
+Generate a key/certificate pair for your dev hostname and serve the proxy over TLS, e.g. with puma:
 
-gem 'thin'
-gem 'rake'
-gem 'rack-proxy'
+```sh
+puma -b 'ssl://0.0.0.0:9292?key=keys/domain.key&cert=keys/domain.crt' config.ru
 ```
 
-Create `config.yml` file with configuration of web server `thin`:
-```yml
----
-ssl: true
-ssl-key-file: keys/domain.key
-ssl-cert-file: keys/domain.crt
-ssl-disable-verify: false
-```
+Point the dev hostname at yourself (`127.0.0.1 debug.your_app.com` in `/etc/hosts`), and make sure your app honors `X-Forwarded-Host` / `X-Forwarded-Proto` from this trusted hop (e.g. `server.forward-headers-strategy: framework` in Spring Boot, or Rails' default `config.action_dispatch` handling).
 
-Create 'keys' directory and generate SSL key and certificates files `domain.key` and `domain.crt`
+### Client TLS certificates (mutual TLS)
 
-Run `bundle exec thin start` for running it with `thin`'s default port.
+When a third-party API authenticates clients with TLS certificates, terminate the client's request and re-sign the outgoing connection:
 
-Or use `sudo -E thin start -C config.yml -p 443` for running with default for `https://` port.
-
-Don't forget to enable processing of `X-Forwarded-...` headers on your application side. Just add following strings to your `resources/application.yml` file.
-```yml
----
-server:
-  tomcat:
-    remote-ip-header: x-forwarded-for
-    protocol-header:  x-forwarded-proto
-  use-forward-headers:  true
-```
-
-Add some domain name like `debug.your_app.com` into your local `/etc/hosts` file like
-```
-127.0.0.1	debug.your_app.com
-```
-
-Next start the proxy and your app. And now you can access to your Spring application through SSL connection via `https://debug.your_app.com` URI in a browser.
-
-### Using SSL/TLS certificates with HTTP connection
-This may be helpful, when third-party API has authentication by client TLS certificates and you need to proxy your requests and sign them with certificate.
-
-Just specify Rack::Proxy SSL options and your request will use TLS HTTP connection:
 ```ruby
 # config.ru
-. . .
+cert = OpenSSL::X509::Certificate.new(File.read("./certs/client.crt"))
+key = OpenSSL::PKey.read(File.read("./certs/key.pem"))
 
-cert_raw = File.read('./certs/rootCA.crt')
-key_raw = File.read('./certs/key.pem')
-
-cert = OpenSSL::X509::Certificate.new(cert_raw)
-key = OpenSSL::PKey.read(key_raw)
-
-use TLSProxy, backend: "https://client-tls-auth-api.com", cert: cert, key: key, verify_mode: OpenSSL::SSL::VERIFY_PEER, min_version: :TLS1_2
+use TLSProxy, backend: "https://client-tls-auth-api.com",
+  cert: cert, key: key, min_version: :TLS1_2
 ```
 
-And rewrite host for example:
 ```ruby
 # tls_proxy.rb
 class TLSProxy < Rack::Proxy
-  attr_accessor :original_request, :query_params
-
   def rewrite_env(env)
     env["HTTP_HOST"] = "client-tls-auth-api.com:443"
     env
@@ -381,8 +380,7 @@ class TLSProxy < Rack::Proxy
 end
 ```
 
-Upgrading
-----
+## Upgrading
 
 ### 0.8.x → 1.0.0
 
@@ -421,16 +419,29 @@ Rack::Proxy.new(ssl_verify_none: true)              # or
 Rack::Proxy.new(verify_mode: OpenSSL::SSL::VERIFY_NONE)
 ```
 
-For internal services with a private CA, prefer setting `cert`/`verify_mode` over disabling verification altogether.
+For internal services with a private CA, prefer setting `ca_file`/`cert_store` over disabling verification altogether.
 
-A note on header keys (#96)
-----
+## Header keys and underscores
 
-Per the standard Rack/CGI convention, header names received by your proxy are exposed in the env with underscores (`HTTP_X_CUSTOM_HEADER`), and rack-proxy rewrites them with dashes (`X-Custom-Header`) when forwarding. This conversion is lossy: by the time a request reaches rack-proxy, the upstream web server (nginx, Apache, Caddy, Puma) has already collapsed both `X-Custom-Header` and `X_Custom_Header` into the same env key, and rack-proxy cannot recover the original spelling.
+Per the standard Rack/CGI convention, header names received by your proxy are exposed in the env with underscores (`HTTP_X_CUSTOM_HEADER`), and rack-proxy rewrites them with dashes (`X-Custom-Header`) when forwarding. This conversion is lossy: by the time a request reaches rack-proxy, the upstream web server (nginx, Apache, Caddy, Puma) has already collapsed both `X-Custom-Header` and `X_Custom_Header` into the same env key, and rack-proxy cannot recover the original spelling (see [#96](https://github.com/ncr/rack-proxy/issues/96)).
 
 If you need underscore-style headers preserved end-to-end, configure your fronting web server (e.g. `underscores_in_headers on;` in nginx, or `HTTPProtocolOptions` in Apache) — rack-proxy is not the right layer to fix this.
 
-Compatibility notes
-----
+## Compatibility notes
 
 The streaming response path (the default) streams straight off the backend socket via `Net::HTTP`. Historically it relied on private `net/http` internals and did not work at all under `webmock`, `vcr`, or `fakeweb`; it now uses only the public `Net::HTTP#request` API, but those libraries still replace the real network layer, so behavior under them is not guaranteed. In tests that stub HTTP, prefer `streaming: false`.
+
+## Development
+
+```sh
+bundle install
+bundle exec rake test            # full suite, fully offline, ~2-3s
+LIVE=1 bundle exec rake test     # additionally runs real-internet smoke tests
+bundle exec standardrb           # style check (CI-blocking)
+```
+
+Bug reports and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and [CLAUDE.md](CLAUDE.md) for the invariants every change must preserve. Release history lives in [CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+Released under the [MIT License](LICENSE).
