@@ -8,6 +8,26 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Nothing yet.
 
+## [1.0.2] - 2026-09-01
+
+Housekeeping — no library behavior changes. **No action is needed by users:**
+the shipped gem does not depend on `json` and was never affected by the
+advisory below.
+
+### Security
+
+- Development dependency `json` bumped 2.21.1 → 2.21.2 to clear
+  CVE-2026-71847 / GHSA-9hj4-r449-hfvc (`JSON::ResumableParser#partial_value`
+  dereferences a freed input buffer on truncated duplicate-key streams).
+  `json` reaches this repo only transitively (`standard` → `rubocop` → `json`)
+  and lives solely in the development `Gemfile.lock`; the bump keeps the CI
+  `bundler-audit` gate green.
+
+### Changed
+
+- Release workflow: the laggy rubygems full-index await was replaced with a
+  versions-API check, so a successful publish no longer fails the run. (#142)
+
 ## [1.0.1] - 2026-07-23
 
 Docs and housekeeping — no library behavior changes.
@@ -175,7 +195,8 @@ or a compatible fix. See the README's "Upgrading" section for migration steps.
 
 Older releases (≤ 0.7.8) predate this changelog; see the git history and tags.
 
-[Unreleased]: https://github.com/ncr/rack-proxy/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/ncr/rack-proxy/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/ncr/rack-proxy/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ncr/rack-proxy/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ncr/rack-proxy/compare/v0.8.3...v1.0.0
 [0.8.3]: https://github.com/ncr/rack-proxy/compare/v0.8.2...v0.8.3
