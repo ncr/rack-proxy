@@ -132,13 +132,20 @@ class RackProxyTest < Test::Unit::TestCase
 
     headers = proxy_class.normalize_headers(env)
     assert headers["Set-Cookie"].include?("cookie1=foo"), "Include the first value"
-    assert headers["Set-Cookie"].include?("\n"), "Join multiple cookies with newlines"
+    if Rack.const_defined?(:Headers, false)
+      assert_equal ["cookie1=foo", "cookie2=bar"], headers["Set-Cookie"]
+    else
+      assert headers["Set-Cookie"].include?("\n"), "Rack 2 joins multiple cookies with newlines"
+    end
     assert headers["Set-Cookie"].include?("cookie2=bar"), "Include the second value"
   end
 
   def test_handles_missing_content_length
-    assert_nothing_thrown do
-      post "/", nil, "CONTENT_LENGTH" => nil
+    with_webrick_proxy do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      post "/echo-body", nil, "CONTENT_LENGTH" => nil
+      assert_equal 200, last_response.status
+      assert_equal "", last_response.body
     end
   end
 
@@ -221,13 +228,20 @@ class RackProxyTest < Test::Unit::TestCase
     assert_equal "", last_response.body
   end
 
-  # `.invalid` is reserved (RFC 6761) and never resolves, so this stays
-  # deterministic and offline: the SocketError from a failed DNS lookup must be
-  # mapped to 502, not raised.
+  # Simulate only DNS failure, leaving Net::HTTP's connection path intact.
+  # Even a reserved .invalid name can trigger an external DNS query otherwise.
   def test_unknown_host_returns_502
+    resolver = Addrinfo.method(:getaddrinfo)
+    Addrinfo.define_singleton_method(:getaddrinfo) do |host, *args, **kwargs|
+      raise SocketError, "offline test: host not found" if host == "no-such-host.invalid"
+
+      resolver.call(host, *args, **kwargs)
+    end
     app({streaming: false}).host = "no-such-host.invalid"
     get "/"
     assert_equal 502, last_response.status
+  ensure
+    Addrinfo.define_singleton_method(:getaddrinfo, resolver)
   end
 
   # Issues #122/#123: body should be [] for empty responses and for status

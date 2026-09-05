@@ -37,6 +37,30 @@ module Rack
       Net::HTTPBadResponse, Net::HTTPHeaderSyntaxError
     ].freeze
 
+    class InvalidRequest < StandardError; end
+
+    # Net::HTTP copies a body stream until EOF, even when Content-Length is
+    # smaller. Bound the input so extra bytes cannot become a second request.
+    class RequestBodyStream
+      def initialize(input, length)
+        @input, @remaining = input, length
+      end
+
+      def read(length, buffer = nil)
+        if @remaining.zero?
+          buffer&.clear
+          return nil
+        end
+
+        data = @input.read([length, @remaining].min, buffer)
+        raise InvalidRequest, "request body is shorter than Content-Length" if data.nil? || data.empty?
+
+        @remaining -= data.bytesize
+        data
+      end
+    end
+    private_constant :InvalidRequest, :RequestBodyStream
+
     class << self
       def extract_http_request_headers(env)
         headers = env.reject do |k, v|
@@ -63,7 +87,18 @@ module Rack
 
       def normalize_headers(headers)
         mapped = headers.map do |k, v|
-          [titleize(k), v.is_a?(Array) ? v.join("\n") : v]
+          value = if v.is_a?(Array)
+            if v.length == 1
+              v.first
+            elsif Rack.const_defined?(:Headers, false)
+              v
+            else
+              v.join("\n")
+            end
+          else
+            v
+          end
+          [titleize(k), value]
         end
         build_header_hash mapped.to_h
       end
@@ -115,8 +150,8 @@ module Rack
       @open_timeout = opts[:open_timeout]
       @write_timeout = opts[:write_timeout]
       # Optional cap (in bytes) on the backend response size, to bound memory
-      # against a hostile/huge backend. Enforced incrementally while streaming and
-      # via the declared Content-Length / buffered size otherwise. Default: no cap.
+      # against a hostile/huge backend. Checked before buffering each chunk in
+      # either mode, as well as against declared lengths. Default: no cap.
       @max_response_length = opts[:max_response_length]
       # :ssl_version pins an exact protocol and is deprecated (it forbids TLS 1.3);
       # prefer :min_version / :max_version, which map to Net::HTTP#min_version=/#max_version=.
@@ -223,12 +258,22 @@ module Rack
         # its own content-encoding.
         target_request.instance_variable_set(:@decode_content, false) if target_request.instance_variable_defined?(:@decode_content)
 
-        # Setup body
+        # Rack supplies decoded input. Generate framing for this hop instead
+        # of forwarding the client's Transfer-Encoding or guessing a zero size.
         if target_request.request_body_permitted? && source_request.body
-          target_request.body_stream = source_request.body
-          target_request.content_length = source_request.content_length.to_i
+          input = source_request.body
+          input.rewind if input.respond_to?(:rewind)
+          if (length = source_request.content_length)
+            raise InvalidRequest, "invalid Content-Length" unless /\A[0-9]+\z/.match?(length)
+
+            target_request.content_length = length.to_i
+            target_request.body_stream = RequestBodyStream.new(input, length.to_i)
+          else
+            target_request.delete("Content-Length")
+            target_request["Transfer-Encoding"] = "chunked"
+            target_request.body_stream = input
+          end
           target_request.content_type = source_request.content_type if source_request.content_type
-          target_request.body_stream.rewind if target_request.body_stream.respond_to?(:rewind)
         end
 
         # Use basic auth if we have to
@@ -267,64 +312,93 @@ module Rack
             configure_backend_connection(http, use_ssl: use_ssl, read_timeout: read_timeout)
           end
           target_response.logger = @logger if @logger
+          code = target_response.code
+          headers = prepare_response_headers(target_response.headers, code, target_request)
+          if response_body_permitted?(target_request, code)
+            target_response.max_response_length = @max_response_length
+            body = target_response
+          else
+            target_response.close
+            body = []
+          end
         else
           http = Net::HTTP.new(backend.host, backend.port)
           configure_backend_connection(http, use_ssl: use_ssl, read_timeout: read_timeout)
 
-          target_response = http.start do
-            http.request(target_request)
+          http.start do
+            http.request(target_request) do |response|
+              code = response.code.to_i
+              headers = prepare_response_headers(response.to_hash, code, target_request)
+              body = []
+              if response_body_permitted?(target_request, code)
+                buffered = +"".b
+                response.read_body do |chunk|
+                  check_response_length!(buffered.bytesize + chunk.bytesize)
+                  buffered << chunk
+                end
+                if response.content_length && buffered.bytesize != response.content_length
+                  raise EOFError, "backend response is shorter than Content-Length"
+                end
+                body << buffered unless buffered.empty?
+              end
+            end
           end
         end
-
-        code = target_response.code
-        headers = self.class.normalize_headers(target_response.respond_to?(:headers) ? target_response.headers : target_response.to_hash)
-        body = target_response.body || []
-        body = [body] unless body.respond_to?(:each)
-      rescue URI::InvalidURIError
+      rescue URI::InvalidURIError, InvalidRequest
+        target_response&.close
         return [400, {}, []]
-      rescue *BACKEND_ERRORS => e
+      rescue *BACKEND_ERRORS, HttpStreamingResponse::ResponseTooLarge => e
+        target_response&.close
         @logger << "rack-proxy: backend request failed: #{e.class}: #{e.message}\n" if @logger.respond_to?(:<<)
         return [502, {}, []]
       end
-
-      # No entity body for status codes that don't allow one (1xx, 204, 304)
-      body = [] if Rack::Utils::STATUS_WITH_NO_ENTITY_BODY[code.to_i]
-
-      # Remove hop-by-hop header fields from the response. Use #delete (not
-      # #reject!) so the returned HeaderHash's case-insensitive index stays
-      # consistent on Rack 2 for any downstream middleware.
-      headers.keys.each { |k| headers.delete(k) if HOP_BY_HOP_HEADERS[k.downcase] }
-
-      return [502, {}, []] if response_too_large?(target_response, headers, body)
 
       [code, headers, body]
     end
 
     private
 
-    # Enforce :max_response_length. Returns true (→ 502) when the response is
-    # already known to be too large. For streaming, a declared oversize is
-    # rejected up-front (the connection is closed) and the incremental limit is
-    # armed on the body for chunked/unknown-length responses; for non-streaming,
-    # the body is already buffered so we check its actual size. Returns false
-    # (allow) when no cap is set.
-    def response_too_large?(target_response, headers, body)
-      return false unless @max_response_length
+    def response_body_permitted?(request, code)
+      request.response_body_permitted? && !Rack::Utils::STATUS_WITH_NO_ENTITY_BODY[code] && code != 205
+    end
 
-      declared = headers["Content-Length"]
-      declared_oversize = declared && declared.to_i > @max_response_length
-
-      if target_response.respond_to?(:max_response_length=)
-        if declared_oversize
-          target_response.close
-          return true
-        end
-        target_response.max_response_length = @max_response_length
-        false
-      else
-        buffered = body.sum { |part| part.to_s.bytesize }
-        declared_oversize || buffered > @max_response_length
+    def check_response_length!(length)
+      if @max_response_length && length && length > @max_response_length
+        raise HttpStreamingResponse::ResponseTooLarge, "backend response exceeded max_response_length=#{@max_response_length}"
       end
+    end
+
+    # Validate framing before dropping hop-by-hop fields or reading a body.
+    # Net::HTTP dechunks responses but otherwise preserves their headers.
+    def prepare_response_headers(raw_headers, code, request)
+      # Rack 2 HeaderHash#each joins arrays with newlines. Read values directly
+      # so repeated framing/Connection fields stay distinct during validation.
+      headers = self.class.build_header_hash(raw_headers.keys.map { |key| [key, raw_headers[key]] })
+      transfer_encoding = headers["Transfer-Encoding"]
+      content_length = headers["Content-Length"]
+      if transfer_encoding
+        if content_length || Array(transfer_encoding).join(",").strip.downcase != "chunked"
+          raise Net::HTTPBadResponse, "ambiguous or unsupported backend transfer encoding"
+        end
+      end
+      if content_length
+        lengths = Array(content_length).flat_map { |value| value.split(",", -1).map(&:strip) }
+        unless lengths.all? { |value| /\A[0-9]+\z/.match?(value) } && lengths.map(&:to_i).uniq.length == 1
+          raise Net::HTTPBadResponse, "invalid backend Content-Length"
+        end
+        headers["Content-Length"] = lengths.first.to_i.to_s
+        check_response_length!(lengths.first.to_i) if response_body_permitted?(request, code)
+      end
+
+      connection_named = Array(headers["Connection"]).join(",").downcase.split(",").map(&:strip)
+      headers.keys.each do |key|
+        headers.delete(key) if HOP_BY_HOP_HEADERS[key.downcase] || connection_named.include?(key.downcase)
+      end
+      if Rack::Utils::STATUS_WITH_NO_ENTITY_BODY[code]
+        headers.delete("Content-Length")
+        headers.delete("Content-Type")
+      end
+      self.class.normalize_headers(headers)
     end
 
     # Resolve the Net::HTTP request class for an HTTP method, or nil if there is
@@ -340,6 +414,9 @@ module Rack
     # TLS option — notably the VERIFY_PEER default — can never land on only one.
     def configure_backend_connection(conn, use_ssl:, read_timeout:)
       conn.use_ssl = use_ssl
+      # Request input need not be rewindable. A transport retry could replay an
+      # operation with an empty or partial body, so neither path retries it.
+      conn.max_retries = 0
       conn.read_timeout = read_timeout
       conn.open_timeout = @open_timeout if @open_timeout
       conn.write_timeout = @write_timeout if @write_timeout

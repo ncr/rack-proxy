@@ -37,7 +37,7 @@ Typical uses:
 Requires Ruby >= 3.0 and Rack 2.x or 3.x. Add to your `Gemfile`:
 
 ```ruby
-gem "rack-proxy", "~> 1.0"
+gem "rack-proxy", "~> 2.0"
 ```
 
 ## Quick start
@@ -116,7 +116,7 @@ Pass options when instantiating (`Rack::Proxy.new(backend: ...)`) or mounting mi
 - `:read_timeout` — per-read timeout in seconds (default `60`).
 - `:open_timeout` — connection-open timeout in seconds.
 - `:write_timeout` — per-write timeout in seconds.
-- `:max_response_length` — cap (in bytes) on the backend response size; a larger response is refused with `502` (streaming aborts once the cap is passed).
+- `:max_response_length` — cap (in bytes) on the backend response body. Oversized declared lengths are refused before reading the body, and each chunk is checked before buffering or forwarding it. Non-streaming responses return `502` on overflow; streaming responses abort if overflow is discovered after sending the headers. HEAD/304 representation lengths do not count as body bytes.
 
 ### Request shaping
 
@@ -240,7 +240,7 @@ From [`examples/example_service_proxy.rb`](examples/example_service_proxy.rb):
 # 1. rails new test_app
 # 2. cd test_app
 # 3. install Rack-Proxy in `Gemfile`
-#    a. `gem 'rack-proxy', '~> 1.0'`
+#    a. `gem 'rack-proxy', '~> 2.0'`
 # 4. install gem: `bundle install`
 # 5. copy the class into your app and mount it from `config/initializers/proxy.rb`
 # 6. run: `SERVICE_URL=http://guides.rubyonrails.org rails server`
@@ -381,6 +381,17 @@ end
 ```
 
 ## Upgrading
+
+### 1.x → 2.0.0
+
+2.0.0 hardens HTTP framing and response limits. Ruby and Rack requirements are unchanged.
+
+- **Automatic transport retries are disabled in both modes.** Non-streaming requests previously inherited Net::HTTP's retry behavior. If your application needs retries, use an explicit policy that considers whether the operation is safe to replay and provides a fresh request body for each attempt.
+- **Response hooks follow Rack's types.** Statuses are integers in both modes. On Rack 3, repeated headers such as `Set-Cookie` are arrays of strings; update hooks that split these values on newlines. Rack 2 still uses newline-separated strings.
+- **Framing errors fail explicitly.** Malformed request lengths and incomplete uploads return `400`. Ambiguous backend framing returns `502`. A truncated backend body returns `502` before headers are sent, or raises during streaming so the server aborts the transfer. Uploads without `CONTENT_LENGTH` are forwarded with chunked encoding; backends must support HTTP/1.1 chunked requests.
+- **Response limits apply before buffering.** `max_response_length` now bounds non-streaming accumulation. HEAD and 304 representation lengths do not count toward the body cap.
+
+Update your Gemfile to `gem "rack-proxy", "~> 2.0"` and run `bundle update rack-proxy`. Existing explicit backend and TLS options continue to work.
 
 ### 0.8.x → 1.0.0
 

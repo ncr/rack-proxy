@@ -7,7 +7,7 @@
 # 1. rails new test_app
 # 2. cd test_app
 # 3. install Rack-Proxy in `Gemfile`
-#    a. `gem 'rack-proxy', '~> 1.0'`
+#    a. `gem 'rack-proxy', '~> 2.0'`
 # 4. install gem: `bundle install`
 # 5. copy this class into your app (e.g. `app/middleware/example_service_proxy.rb`)
 #    and mount it from `config/initializers/proxy.rb`
