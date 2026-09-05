@@ -7,13 +7,14 @@ threat model below alongside the "Security considerations" section of the README
 
 ## Supported versions
 
-Security fixes are released for the latest major series. The last `0.x` series
-receives fixes for critical issues only, for a transition period — please
-upgrade to `1.x`.
+Security fixes are released for the latest major series. Older supported
+series receive critical fixes only during their transition period — please
+upgrade to `2.x`.
 
 | Version | Supported |
 | ------- | --------- |
-| 1.0.x   | ✅        |
+| 2.0.x   | ✅        |
+| 1.0.x   | critical fixes only |
 | 0.8.x   | critical fixes only |
 | < 0.8   | ❌        |
 

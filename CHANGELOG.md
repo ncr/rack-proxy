@@ -8,6 +8,49 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Nothing yet.
 
+## [2.0.0] - 2026-09-05
+
+### Breaking changes
+
+- Non-streaming requests no longer automatically retry transport failures.
+  This prevents replay with consumed request input; applications that require
+  retries must implement them with a fresh body and an explicit retry policy.
+- Rack 3 response hooks receive arrays for repeated header values, including
+  `Set-Cookie`, and non-streaming statuses are integers. Update hooks that
+  assumed newline-separated headers or string statuses. Rack 2 retains its
+  newline-separated header representation.
+- Invalid or ambiguous HTTP framing is now rejected, incomplete responses fail,
+  and uploads without a known length use fresh chunked framing. Backends must
+  accept properly framed HTTP/1.1 requests and send valid, complete responses.
+
+### Security
+
+- Reframe decoded request bodies without a `CONTENT_LENGTH` using chunked
+  encoding instead of sending body bytes after `Content-Length: 0`. Bound
+  known-length input streams so excess bytes cannot become another backend
+  request; malformed lengths and prematurely ended uploads return `400`.
+- Reject ambiguous backend framing (`Transfer-Encoding` with `Content-Length`,
+  conflicting or invalid lengths, and unsupported transfer codings) with `502`.
+- Strip response headers named by the backend's `Connection` fields as well as
+  the standard hop-by-hop headers.
+- Enforce `max_response_length` before buffering each chunk in non-streaming
+  mode, including rejecting declared oversized responses before reading them.
+- Detect premature EOF in fixed-length responses: return `502` before sending
+  headers, or raise while streaming so the server aborts the incomplete transfer.
+- Disable Net::HTTP transport retries in non-streaming mode as well as streaming
+  mode, preventing replay with an already-consumed request body.
+
+### Fixed
+
+- Return integer statuses in non-streaming mode and preserve multiple response
+  header values as arrays on Rack 3 (including `Set-Cookie`). Rack 2 keeps its
+  newline-separated representation.
+- Remove entity headers forbidden by Rack on 1xx/204/304 responses. HEAD and
+  304 representation sizes no longer incorrectly trigger the response body cap.
+- Replace a remaining live-host test with a local fixture and simulate failed
+  DNS resolution without sending external DNS queries. Add offline adversarial
+  framing, size-limit, retry, and `Rack::Lint` regression checks.
+
 ## [1.0.2] - 2026-09-01
 
 Housekeeping — no library behavior changes. **No action is needed by users:**
@@ -195,7 +238,8 @@ or a compatible fix. See the README's "Upgrading" section for migration steps.
 
 Older releases (≤ 0.7.8) predate this changelog; see the git history and tags.
 
-[Unreleased]: https://github.com/ncr/rack-proxy/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/ncr/rack-proxy/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/ncr/rack-proxy/compare/v1.0.2...v2.0.0
 [1.0.2]: https://github.com/ncr/rack-proxy/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ncr/rack-proxy/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ncr/rack-proxy/compare/v0.8.3...v1.0.0

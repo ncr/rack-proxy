@@ -135,7 +135,16 @@ module Rack
         @fiber = Fiber.new do
           session.request(request) do |res|
             Fiber.yield res
-            res.read_body { |chunk| Fiber.yield chunk }
+            bytes = 0
+            res.read_body do |chunk|
+              bytes += chunk.bytesize
+              Fiber.yield chunk
+            end
+            # Net::HTTP tolerates premature EOF for Content-Length bodies on
+            # supported Ruby versions. A proxy must signal an incomplete body.
+            if request.response_body_permitted? && res.class.body_permitted? && res.content_length && bytes != res.content_length
+              raise EOFError, "backend response is shorter than Content-Length"
+            end
           end
           :done
         end
