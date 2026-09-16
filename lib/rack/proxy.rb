@@ -46,7 +46,9 @@ module Rack
         @input, @remaining = input, length
       end
 
-      def read(length, buffer = nil)
+      def read(length = nil, buffer = nil)
+        return read_remaining(buffer) if length.nil?
+
         if @remaining.zero?
           buffer&.clear
           return nil
@@ -57,6 +59,19 @@ module Rack
 
         @remaining -= data.bytesize
         data
+      end
+
+      private
+
+      # IO#read without a length returns everything up to EOF ("" once there).
+      # Net::HTTP never calls it that way, but instrumentation layers wrapping
+      # Net::HTTP#request (WebMock's adapter, for one) do.
+      def read_remaining(buffer)
+        data = +"".b
+        while (chunk = read(16_384))
+          data << chunk
+        end
+        buffer ? buffer.replace(data) : data
       end
     end
     private_constant :InvalidRequest, :RequestBodyStream
