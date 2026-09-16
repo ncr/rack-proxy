@@ -6,7 +6,13 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- The bounded request body stream accepts `IO#read`'s optional `length` and
+  `buffer` arguments. Net::HTTP instrumentation layers that read the whole
+  request body at once (WebMock's adapter, for example) raised
+  `ArgumentError` against 2.0.0, failing the test suite of any app that
+  proxies a request body.
 
 ## [2.0.0] - 2026-09-05
 

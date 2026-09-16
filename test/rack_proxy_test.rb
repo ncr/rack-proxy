@@ -185,6 +185,38 @@ class RackProxyTest < Test::Unit::TestCase
     end
   end
 
+  # Net::HTTP drains body_stream through IO.copy_stream, which always passes a
+  # length, but Net::HTTP instrumentation layers (WebMock's adapter among them)
+  # call body_stream.read with no arguments, as IO#read and the Rack SPEC allow.
+  # 2.0.0's bounded stream required the length and raised ArgumentError there,
+  # breaking the test suites of every app that proxies a request body.
+  def test_request_body_stream_read_without_length_returns_remaining_bytes
+    stream = request_body_stream("hello world, extra", 11)
+
+    assert_equal "hello", stream.read(5)
+    assert_equal " world", stream.read
+    assert_equal "", stream.read, "IO#read without a length returns an empty string at EOF"
+    assert_nil stream.read(1), "IO#read with a length returns nil at EOF"
+  end
+
+  def test_request_body_stream_read_without_length_fills_the_buffer
+    stream = request_body_stream("hello", 5)
+    buffer = +"stale"
+
+    assert_same buffer, stream.read(nil, buffer)
+    assert_equal "hello", buffer
+  end
+
+  def test_request_body_stream_read_without_length_rejects_short_bodies
+    stream = request_body_stream("hi", 5)
+
+    assert_raise(Rack::Proxy.const_get(:InvalidRequest, false)) { stream.read }
+  end
+
+  def request_body_stream(body, content_length)
+    Rack::Proxy.const_get(:RequestBodyStream, false).new(StringIO.new(body), content_length)
+  end
+
   # Issue: hop-by-hop headers (here Transfer-Encoding, sent by the chunked
   # backend) must be stripped from the response. The local /chunked route makes
   # this assertion meaningful — the previous live-host version passed vacuously
