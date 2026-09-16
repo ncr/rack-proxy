@@ -6,13 +6,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [2.0.1] - 2026-09-16
+
 ### Fixed
 
-- The bounded request body stream accepts `IO#read`'s optional `length` and
-  `buffer` arguments. Net::HTTP instrumentation layers that read the whole
-  request body at once (WebMock's adapter, for example) raised
-  `ArgumentError` against 2.0.0, failing the test suite of any app that
-  proxies a request body.
+- The bounded request body stream accepts `IO#read`'s optional `length`
+  argument. Net::HTTP instrumentation layers that read the whole request body
+  at once (WebMock's adapter, for example) raised `ArgumentError` against
+  2.0.0, failing the test suite of any app that proxies a request body. (#145)
 
 ## [2.0.0] - 2026-09-05
 
@@ -244,7 +247,8 @@ or a compatible fix. See the README's "Upgrading" section for migration steps.
 
 Older releases (≤ 0.7.8) predate this changelog; see the git history and tags.
 
-[Unreleased]: https://github.com/ncr/rack-proxy/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/ncr/rack-proxy/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/ncr/rack-proxy/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/ncr/rack-proxy/compare/v1.0.2...v2.0.0
 [1.0.2]: https://github.com/ncr/rack-proxy/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ncr/rack-proxy/compare/v1.0.0...v1.0.1
