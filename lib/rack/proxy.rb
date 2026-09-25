@@ -278,6 +278,13 @@ module Rack
 
         code = target_response.code
         headers = self.class.normalize_headers(target_response.respond_to?(:headers) ? target_response.headers : target_response.to_hash)
+        # Net::HTTP dechunks the body but retains the backend's Content-Length.
+        # Reject ambiguous framing before removing any hop-by-hop headers so
+        # that stale length can never frame the downstream response.
+        if headers.key?("Transfer-Encoding") && headers.key?("Content-Length")
+          target_response.close if target_response.respond_to?(:close)
+          return [502, {}, []]
+        end
         body = target_response.body || []
         body = [body] unless body.respond_to?(:each)
       rescue URI::InvalidURIError
@@ -293,7 +300,10 @@ module Rack
       # Remove hop-by-hop header fields from the response. Use #delete (not
       # #reject!) so the returned HeaderHash's case-insensitive index stays
       # consistent on Rack 2 for any downstream middleware.
-      headers.keys.each { |k| headers.delete(k) if HOP_BY_HOP_HEADERS[k.downcase] }
+      connection_named = headers["Connection"].to_s.downcase.split(/[,\n]/).map(&:strip)
+      headers.keys.each do |k|
+        headers.delete(k) if HOP_BY_HOP_HEADERS[k.downcase] || connection_named.include?(k.downcase)
+      end
 
       return [502, {}, []] if response_too_large?(target_response, headers, body)
 

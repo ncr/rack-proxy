@@ -137,8 +137,11 @@ class RackProxyTest < Test::Unit::TestCase
   end
 
   def test_handles_missing_content_length
-    assert_nothing_thrown do
-      post "/", nil, "CONTENT_LENGTH" => nil
+    with_webrick_proxy do |port, proxy|
+      proxy.host = "127.0.0.1:#{port}"
+      post "/echo-body", nil, "CONTENT_LENGTH" => nil
+      assert_equal 200, last_response.status
+      assert_equal "", last_response.body
     end
   end
 
@@ -221,13 +224,20 @@ class RackProxyTest < Test::Unit::TestCase
     assert_equal "", last_response.body
   end
 
-  # `.invalid` is reserved (RFC 6761) and never resolves, so this stays
-  # deterministic and offline: the SocketError from a failed DNS lookup must be
-  # mapped to 502, not raised.
+  # Simulate DNS failure locally: even a reserved .invalid name could otherwise
+  # send an external DNS query. Keep the real Net::HTTP connection path.
   def test_unknown_host_returns_502
+    resolver = Addrinfo.method(:getaddrinfo)
+    Addrinfo.define_singleton_method(:getaddrinfo) do |host, *args, **kwargs|
+      raise SocketError, "offline test: host not found" if host == "no-such-host.invalid"
+
+      resolver.call(host, *args, **kwargs)
+    end
     app({streaming: false}).host = "no-such-host.invalid"
     get "/"
     assert_equal 502, last_response.status
+  ensure
+    Addrinfo.define_singleton_method(:getaddrinfo, resolver)
   end
 
   # Issues #122/#123: body should be [] for empty responses and for status

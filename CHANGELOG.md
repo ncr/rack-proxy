@@ -8,6 +8,21 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Nothing yet.
 
+## [1.0.3] - 2026-09-25
+
+### Security
+
+- Reject backend responses carrying both `Transfer-Encoding` and
+  `Content-Length` with `502` in streaming and non-streaming mode. This prevents
+  an attacker-controlled length from framing a dechunked downstream response
+  (GHSA-42qh-8mx8-7wqm). Rejected streaming responses close the backend connection.
+- Strip response headers named by all backend `Connection` fields, in addition
+  to the standard hop-by-hop headers.
+
+This is a targeted security backport for 1.x; successful response status types,
+header representations, request framing, and retry behavior remain unchanged.
+Versions 2.0.0 and later already reject the ambiguous response framing.
+
 ## [1.0.2] - 2026-09-01
 
 Housekeeping — no library behavior changes. **No action is needed by users:**
@@ -195,7 +210,8 @@ or a compatible fix. See the README's "Upgrading" section for migration steps.
 
 Older releases (≤ 0.7.8) predate this changelog; see the git history and tags.
 
-[Unreleased]: https://github.com/ncr/rack-proxy/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/ncr/rack-proxy/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/ncr/rack-proxy/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/ncr/rack-proxy/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ncr/rack-proxy/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ncr/rack-proxy/compare/v0.8.3...v1.0.0

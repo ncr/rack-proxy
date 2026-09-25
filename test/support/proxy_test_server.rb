@@ -26,6 +26,26 @@ require "tempfile"
 module ProxyTestServer
   module_function
 
+  # For malformed framing and incomplete transfers that WEBrick would repair.
+  # The handler receives a real socket after the request headers are consumed.
+  def with_raw_backend(handler)
+    server = TCPServer.new("127.0.0.1", 0)
+    thread = Thread.new do
+      client = server.accept
+      client.gets("\r\n\r\n")
+      handler.call(client)
+    rescue IOError, Errno::EPIPE, Errno::ECONNRESET
+      # Rejecting a response is expected to close the socket early.
+    ensure
+      client&.close
+    end
+    yield "http://127.0.0.1:#{server.addr[1]}"
+  ensure
+    thread&.kill
+    thread&.join
+    server&.close
+  end
+
   # Starts a server on an ephemeral port bound to 127.0.0.1 and returns
   # [server, port]. Pass ssl: true for HTTPS. By default the cert is self-signed
   # (untrusted on purpose — exercises the VERIFY_PEER default rejecting it). Pass
