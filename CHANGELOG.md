@@ -6,7 +6,9 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- Closed minor spec gap when a streaming body passes in a nil buffer.
 
 ## [2.0.1] - 2026-09-16
 
