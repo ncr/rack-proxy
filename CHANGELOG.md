@@ -6,7 +6,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- The bounded request body stream no longer passes a `nil` output buffer on to
+  `rack.input#read`, which Rack 3's `Rack::Lint` rejects, when it is read
+  without one. (#148)
 
 ## [2.0.1] - 2026-09-16
 

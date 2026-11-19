@@ -54,6 +54,8 @@ module Rack
           return nil
         end
 
+        # a read buffer cannot be nil; make a new empty buffer
+        buffer ||= +"".b
         data = @input.read([length, @remaining].min, buffer)
         raise InvalidRequest, "request body is shorter than Content-Length" if data.nil? || data.empty?
 
